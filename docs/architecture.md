@@ -9,7 +9,7 @@ schema → core → cli
 
 - `schema` 定义与展示平台无关的数据合同、JSON Schema 和 TypeScript 类型，不负责读文件或扫描题库。
 - `core` 负责 `bank.yaml` 和实体文件发现、YAML 与 Markdown Front Matter 解析、结构及语义校验、实体关联、索引、资源完整性和审核授权校验。规则组卷执行与内容质量检查仍待实现。
-- `cli` 后续负责 `oqb` 命令、参数解析、初始化、校验、构建、导出和终端反馈。当前未实现命令。
+- `cli` 负责 `oqb` 命令、参数解析、题库初始化、校验、统计、诊断和终端反馈。平台导出和构建流程仍待后续阶段。
 - `exporters` 后续从统一内部数据模型生成 GitHub Markdown、Obsidian、Notion 导入包和标准 JSON。当前只保留最小包入口。
 
 `core` 不依赖 CLI 或具体导出器；各包只通过公开接口协作，避免反向依赖和循环依赖。题库内容由使用者独立维护，不与框架仓库绑定。
@@ -30,4 +30,4 @@ JSON Schema 不执行题库内容中的代码。Core 将实体文件限制为 UT
 
 ## 当前交付边界
 
-当前阶段包含 Workspace 配置、工程规范、Schema 1.0、TypeScript 类型、Core 读取与校验 API、Ajv/Vitest 样例和基础文档。CLI、组卷执行、具体导出器、初始化模板和 GitHub Actions 属于后续阶段。
+当前阶段包含 Workspace 配置、工程规范、Schema 1.0、TypeScript 类型、Core 读取与校验 API、CLI 初始化 / 校验 / 统计 / 诊断命令和中文使用指南。规则组卷执行、具体导出器和 GitHub Actions 属于后续阶段。

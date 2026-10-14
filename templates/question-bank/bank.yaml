@@ -1,0 +1,17 @@
+schemaVersion: '1.0.0'
+id: my-question-bank
+name: 我的题库
+description: 请根据题库的实际内容补充简介
+version: '0.1.0'
+language: zh-CN
+# 请根据你拥有的实际授权修改许可证，不要直接沿用示例值
+license: CC-BY-4.0
+maintainers:
+  - name: 题库维护者
+paths:
+  topics: topics
+  knowledge: knowledge
+  questions: questions
+  groups: groups
+  exams: exams
+  assets: assets

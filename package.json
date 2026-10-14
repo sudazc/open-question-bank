@@ -9,6 +9,7 @@
   },
   "scripts": {
     "build": "pnpm --recursive --if-present run build",
+    "oqb": "node packages/cli/dist/index.js",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "eslint .",
     "format:check": "prettier --check .",

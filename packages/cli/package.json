@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "bin": {
+    "oqb": "./dist/index.js"
+  },
   "dependencies": {
     "@openquestionbank/core": "workspace:*"
   },
