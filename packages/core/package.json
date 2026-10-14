@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@openquestionbank/schema": "workspace:*"
+    "@openquestionbank/schema": "workspace:*",
+    "ajv": "8.20.0",
+    "yaml": "2.8.1"
   },
   "exports": {
     ".": {
