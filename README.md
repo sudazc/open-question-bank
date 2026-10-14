@@ -4,7 +4,7 @@ OpenQuestionBank 是一个以文件为基础的开源题库与知识库框架，
 
 它提供统一的数据格式和命令行校验工具，帮助维护者检查题目结构、题目与知识点之间的引用、资源文件、审核状态和发布授权。源数据与 GitHub、Obsidian、Notion 等展示平台分离，避免题库被某一个平台锁定。
 
-项目目前处于 V1.0 的 P2 阶段：Schema 1.0、Core 读取与校验、题库初始化模板、CLI 校验、统计和诊断已实现。具体平台导出、规则组卷执行、自动评分、在线刷题和学习记录尚未实现。
+项目目前进入 V1.0 的 P3 阶段：Schema 1.0、Core 读取与校验、题库初始化模板、CLI 校验 / 统计 / 诊断，以及标准 JSON 导出已实现。GitHub Markdown、Obsidian、Notion 导出、规则组卷执行、自动评分、在线刷题和学习记录尚未实现。
 
 ## 适合什么场景
 
@@ -42,6 +42,7 @@ pnpm oqb init ./my-question-bank
 pnpm oqb validate ./my-question-bank
 pnpm oqb stats ./my-question-bank
 pnpm oqb doctor ./my-question-bank
+pnpm oqb export ./my-question-bank --format json --out ./dist/my-question-bank
 ```
 
 校验默认使用 `draft` 模式，适合日常录入和编辑。下面的例子会检查发布审核条件：
@@ -161,15 +162,29 @@ oqb init [目录]
 oqb validate [目录] [--mode draft|strict|release]
 oqb stats [目录] [--mode draft|strict|release]
 oqb doctor [目录] [--mode draft|strict|release]
+oqb export [目录] [--format json] [--out <目录>] [--mode draft|strict|release]
 ```
 
 - `init` 从仓库模板创建题库。省略目录时使用当前目录；目标目录必须不存在或为空。
 - `validate` 打印错误、警告、文件位置和修复建议。错误或致命错误使命令以退出码 `1` 结束。
 - `stats` 按指定模式统计考点、知识、题目、题组和试卷；统计的是校验器保留的结构有效实体。
 - `doctor` 检查 Node.js 版本、`bank.yaml` 加载结果和题库校验状态。
+- `export` 先校验题库，再生成 `question-bank.json` 和 `manifest.json`。输出目录默认为命令运行目录下的 `dist`；也可以使用 `--out` 指定路径。`--mode release` 只导出通过发布筛选和最终引用校验的数据。
 - 未知命令、参数错误或执行错误使用退出码 `2`；通过使用退出码 `0`。警告不会单独导致校验失败。
 
 所有命令支持 `--help`，目录参数默认为当前目录。CLI 不要求交互输入，可用于本地脚本或 CI。
+
+### 导出标准 JSON
+
+例如，将独立题库校验后输出到单独的构建目录：
+
+```sh
+pnpm oqb export ../my-question-bank --format json --out ./dist/my-question-bank
+```
+
+导出包包含完整的 Bank、Topic、Knowledge、Question、QuestionGroup 和 Exam 数据，并保留 Markdown 正文、稳定 ID、资源相对路径及实体引用；题库引用到的资源文件也会按原路径复制。实体集合按 ID 稳定排序，导出的 `manifest.json` 提供题库版本、实体统计、JSON 和资源文件的大小及 SHA-256，便于自动化检查和后续导入。校验失败时不会生成文件；警告会显示，但不会单独阻止导出。重复导出会更新生成文件，其他文件保持原样。
+
+导出格式字段、目录结构和可复现规则见 [标准 JSON 导出说明](docs/export-json.md)。
 
 ## 建议的维护流程
 
@@ -177,8 +192,8 @@ oqb doctor [目录] [--mode draft|strict|release]
 2. 按稳定 ID 添加考点、知识笔记和题目；录入时将审核状态保持为 `draft`。
 3. 每次修改后运行 `oqb validate <目录>`，根据文件位置和建议修复诊断。
 4. 审阅题目内容及来源授权后更新审核状态，再运行 `--mode strict`。
-5. 发布前运行 `--mode release`，并检查被筛除内容和引用问题。
-6. 使用 Git 提交题库文件的变更，保留可追踪的审核记录。
+5. 发布前运行 `--mode release`，检查被筛除内容和引用问题，再运行 `oqb export <目录> --mode release --out ./dist` 生成数据包。
+6. 检查 `manifest.json` 中的统计和 SHA-256，再使用 Git 提交题库文件的变更，保留可追踪的审核记录。
 
 ## 常见问题
 
@@ -200,13 +215,13 @@ Schema 检查单个实体的字段结构；重复 ID、引用目标是否存在�
 
 ### 是否可以直接导出到 Obsidian 或 Notion？
 
-当前版本尚未实现平台导出器。现阶段可以用文件管理题库、运行校验和统计命令；导出属于后续 P3 阶段。
+当前版本可以导出标准 JSON 数据包；GitHub Markdown、Obsidian 和 Notion 导出器仍在后续开发计划中。标准数据格式不包含平台专属链接，后续导出器会负责生成目标平台可用的链接。
 
 ## 当前能力边界
 
-已实现：Schema 1.0、YAML / Markdown 读取、结构和语义校验、资源检查、题库索引、审核授权模式、初始化模板、CLI 校验、统计和诊断。
+已实现：Schema 1.0、YAML / Markdown 读取、结构和语义校验、资源检查、题库索引、审核授权模式、初始化模板、CLI 校验 / 统计 / 诊断、标准 JSON 导出和发布清单。
 
-尚未实现：规则组卷执行、自动评分、质量审核规则、GitHub Markdown / Obsidian / Notion / JSON 导出、在线刷题、账号、数据库和学习记录。项目架构和职责边界见 [架构说明](docs/architecture.md)。
+尚未实现：规则组卷执行、自动评分、质量审核规则、GitHub Markdown / Obsidian / Notion 导出、在线刷题、账号、数据库和学习记录。项目架构和职责边界见 [架构说明](docs/architecture.md)。
 
 ## 开发与贡献
 

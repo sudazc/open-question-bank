@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -79,6 +80,83 @@ describe('OpenQuestionBank CLI', () => {
     expect(exitCode).toBe(0);
     expect(stdout.join('\n')).toContain('Node.js');
     expect(stdout.join('\n')).toContain('bank.yaml 已加载');
+  });
+
+  it('校验后生成标准 JSON 数据包和可复现清单', async () => {
+    const bankDir = join(rootDir, 'bank');
+    const exportDir = join(rootDir, 'dist', 'bank');
+    await runCli(['init', bankDir], output);
+    const questionFile = join(bankDir, 'questions', 'example.yaml');
+    const question = (await readFile(questionFile, 'utf8')).replace(
+      'explanation: 题库内容以 YAML 和 Markdown 文件保存，可使用 Git 管理变更。',
+      'explanation: "[资源](assets/example.txt)"',
+    );
+    await writeFile(questionFile, `${question}\nassets: [assets/example.txt]\n`);
+    await writeFile(join(bankDir, 'assets', 'example.txt'), '资源文件内容');
+    stdout.length = 0;
+
+    const firstExitCode = await runCli(
+      ['export', bankDir, '--format', 'json', '--out', exportDir],
+      output,
+    );
+    const firstDocument = await readFile(join(exportDir, 'question-bank.json'), 'utf8');
+    const firstManifest = await readFile(join(exportDir, 'manifest.json'), 'utf8');
+    const exportedAsset = await readFile(join(exportDir, 'assets', 'example.txt'), 'utf8');
+    const secondExitCode = await runCli(['export', bankDir, '--out', exportDir], output);
+
+    expect(firstExitCode).toBe(0);
+    expect(secondExitCode).toBe(0);
+    expect(JSON.parse(firstDocument)).toMatchObject({
+      format: 'openquestionbank-json',
+      formatVersion: '1.0.0',
+      data: { bank: { name: '我的题库' }, questions: [{ id: 'question-example' }] },
+    });
+    expect(JSON.parse(firstManifest)).toMatchObject({
+      bank: { id: 'my-question-bank', version: '0.1.0' },
+      statistics: { totalEntities: 4 },
+    });
+    expect(JSON.parse(firstManifest).files).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: 'assets/example.txt',
+          sizeBytes: 18,
+          sha256: createHash('sha256').update(exportedAsset, 'utf8').digest('hex'),
+        }),
+      ]),
+    );
+    expect(exportedAsset).toBe('资源文件内容');
+    expect(await readFile(join(exportDir, 'question-bank.json'), 'utf8')).toBe(firstDocument);
+    expect(await readFile(join(exportDir, 'manifest.json'), 'utf8')).toBe(firstManifest);
+    expect(stdout.join('\n')).toContain('JSON 导出完成');
+  });
+
+  it('校验失败时不生成导出文件', async () => {
+    const bankDir = join(rootDir, 'bank');
+    const exportDir = join(rootDir, 'dist');
+    await runCli(['init', bankDir], output);
+    await writeFile(join(bankDir, 'questions', 'invalid.yaml'), 'id: invalid\n');
+
+    const exitCode = await runCli(['export', bankDir, '--out', exportDir], output);
+
+    expect(exitCode).toBe(1);
+    expect(stderr.join('\n')).toContain('未生成导出文件');
+    await expect(readFile(join(exportDir, 'question-bank.json'), 'utf8')).rejects.toHaveProperty(
+      'code',
+      'ENOENT',
+    );
+  });
+
+  it('拒绝将导出目录放入题库源资源目录', async () => {
+    const bankDir = join(rootDir, 'bank');
+    const assetMarker = join(bankDir, 'assets', '.gitkeep');
+    await runCli(['init', bankDir], output);
+    const originalAsset = await readFile(assetMarker, 'utf8');
+
+    const exitCode = await runCli(['export', bankDir, '--out', join(bankDir, 'assets')], output);
+
+    expect(exitCode).toBe(2);
+    expect(await readFile(assetMarker, 'utf8')).toBe(originalAsset);
+    expect(stderr.join('\n')).toContain('题库源数据目录');
   });
 
   it('显示帮助并拒绝未知校验模式', async () => {

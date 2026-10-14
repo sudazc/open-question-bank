@@ -9,6 +9,7 @@ import {
   type Diagnostic,
   type ValidationMode,
 } from '@openquestionbank/core';
+import { writeQuestionBankJsonExport } from '@openquestionbank/exporters';
 
 const validationModes = ['draft', 'strict', 'release'] as const satisfies readonly ValidationMode[];
 const templateRoot = resolve(
@@ -38,6 +39,8 @@ export async function runCli(
       options: {
         help: { type: 'boolean', short: 'h' },
         mode: { type: 'string', short: 'm' },
+        format: { type: 'string', short: 'f' },
+        out: { type: 'string', short: 'o' },
       },
       allowPositionals: true,
       strict: true,
@@ -76,6 +79,35 @@ export async function runCli(
     return 2;
   }
 
+  const formatValue = values.format;
+  if (formatValue !== undefined && typeof formatValue !== 'string') {
+    output.stderr('--format 必须指定 json');
+    return 2;
+  }
+  if (command === 'export' && formatValue !== undefined && formatValue !== 'json') {
+    output.stderr(`暂不支持导出格式：${formatValue}`);
+    output.stderr('当前可用格式：json');
+    return 2;
+  }
+  if (command !== 'export' && formatValue !== undefined) {
+    output.stderr('--format 仅用于 export 命令');
+    return 2;
+  }
+
+  const outputDirectory = values.out;
+  if (outputDirectory !== undefined && typeof outputDirectory !== 'string') {
+    output.stderr('--out 必须指定输出目录');
+    return 2;
+  }
+  if (command !== 'export' && outputDirectory !== undefined) {
+    output.stderr('--out 仅用于 export 命令');
+    return 2;
+  }
+  if (outputDirectory !== undefined && outputDirectory.trim() === '') {
+    output.stderr('--out 不能为空');
+    return 2;
+  }
+
   const directory = arguments_[0] ?? '.';
   const mode = modeValue ?? 'draft';
   try {
@@ -88,6 +120,8 @@ export async function runCli(
         return await statsCommand(directory, mode, output);
       case 'doctor':
         return await doctorCommand(directory, mode, output);
+      case 'export':
+        return await exportCommand(directory, mode, outputDirectory ?? 'dist', output);
       default:
         output.stderr(`未知命令：${command}`);
         output.stderr('运行 `oqb --help` 查看可用命令');
@@ -218,6 +252,34 @@ async function doctorCommand(
   return supportedNode && result.valid ? 0 : 1;
 }
 
+async function exportCommand(
+  directory: string,
+  mode: ValidationMode,
+  outputDirectory: string,
+  output: CliOutput,
+): Promise<number> {
+  const root = resolve(directory);
+  const result = await validateQuestionBankDirectory(root, { mode });
+  output.stdout(`导出题库：${result.data.bank?.name ?? root}`);
+  printValidationSummary(result.data, result.diagnostics, result.valid, mode, output);
+  printDiagnostics(result.diagnostics, output);
+  if (!result.valid) {
+    output.stderr('题库校验未通过，未生成导出文件');
+    return 1;
+  }
+  if (!result.data.bank) {
+    output.stderr('题库缺少有效的 Bank 实体，未生成导出文件');
+    return 1;
+  }
+
+  const exported = await writeQuestionBankJsonExport(result.data, root, outputDirectory);
+
+  output.stdout(`JSON 导出完成：${exported.outputDirectory}`);
+  output.stdout(`数据文件：${join(exported.outputDirectory, 'question-bank.json')}`);
+  output.stdout(`发布清单：${join(exported.outputDirectory, 'manifest.json')}`);
+  return 0;
+}
+
 function printValidationSummary(
   data: Awaited<ReturnType<typeof validateQuestionBankDirectory>>['data'],
   diagnostics: Diagnostic[],
@@ -296,6 +358,7 @@ function printHelp(output: CliOutput): void {
   oqb validate [目录] [--mode draft|strict|release]
   oqb stats [目录] [--mode draft|strict|release]
   oqb doctor [目录] [--mode draft|strict|release]
+  oqb export [目录] [--format json] [--out <目录>] [--mode draft|strict|release]
   oqb --help
 
 命令：
@@ -303,9 +366,12 @@ function printHelp(output: CliOutput): void {
   validate  校验题库结构、引用、资源及审核授权要求
   stats     统计当前模式下保留的有效题库实体
   doctor    检查 Node.js 环境、bank.yaml 和题库校验结果
+  export    校验题库后生成标准 JSON 数据包和发布清单
 
 选项：
   -m, --mode <模式>  校验模式，默认为 draft
+  -f, --format <格式> 导出格式，当前支持 json
+  -o, --out <目录>   导出目录，默认为当前目录下的 dist
   -h, --help         显示帮助信息
 
 校验模式：

@@ -7,7 +7,8 @@
     "oqb": "./dist/index.js"
   },
   "dependencies": {
-    "@openquestionbank/core": "workspace:*"
+    "@openquestionbank/core": "workspace:*",
+    "@openquestionbank/exporters": "workspace:*"
   },
   "exports": {
     ".": {
