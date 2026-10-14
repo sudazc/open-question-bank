@@ -18,6 +18,21 @@ OpenQuestionBank 是本地运行的软件框架，不提供在线题库网站、
 
 ## 快速开始
 
+### 用 AI 构建题库
+
+可以把 [AI 题库构建指南](AI_GUIDE.md) 或 [OpenQuestionBank 项目主页](https://github.com/sudazc/open-question-bank) 发给 AI 助手。指南会让 AI 先了解项目数据格式，再询问学科方向、适用人群、题源范围、题量、题型、难度和解析需求，然后按 Schema 和模板生成题库并运行校验。
+
+项目链接说明的是题库格式；如果希望题目依据某本教材、课程或已有资料生成，还要另外把资料链接、文件或具体章节范围告诉 AI。资料链接无法访问时，AI 应请你提供内容，而不是假装已经读取。
+
+可以这样开始：
+
+```text
+请先阅读 OpenQuestionBank 的 AI 构建指南：
+https://github.com/sudazc/open-question-bank/blob/main/AI_GUIDE.md
+
+我想创建一个题库，请先问我需要哪些信息，再按指南生成并校验。资料链接：<填写资料链接；没有资料时写“暂无”>。
+```
+
 ### 环境要求
 
 - Node.js `>=22.13.0`
