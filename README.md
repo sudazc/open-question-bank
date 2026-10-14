@@ -4,7 +4,7 @@ OpenQuestionBank 是一个以文件为基础的开源题库与知识库框架，
 
 它提供统一的数据格式和命令行校验工具，帮助维护者检查题目结构、题目与知识点之间的引用、资源文件、审核状态和发布授权。源数据与 GitHub、Obsidian、Notion 等展示平台分离，避免题库被某一个平台锁定。
 
-项目目前进入 V1.0 的 P3 阶段：Schema 1.0、Core 读取与校验、题库初始化模板、CLI 校验 / 统计 / 诊断、标准 JSON 导出和 GitHub Markdown 阅读包已实现。Obsidian、Notion 导出、规则组卷执行、自动评分、在线刷题和学习记录尚未实现。
+项目目前进入 V1.0 的 P3 阶段：Schema 1.0、Core 读取与校验、题库初始化模板、CLI 校验 / 统计 / 诊断、标准 JSON、GitHub Markdown 阅读包和 Obsidian Vault 导出已实现。Notion 导出、规则组卷执行、自动评分、在线刷题和学习记录尚未实现。
 
 ## 适合什么场景
 
@@ -44,6 +44,7 @@ pnpm oqb stats ./my-question-bank
 pnpm oqb doctor ./my-question-bank
 pnpm oqb export ./my-question-bank --format json --out ./dist/my-question-bank
 pnpm oqb export ./my-question-bank --format github-markdown --out ./dist/my-question-bank-github
+pnpm oqb export ./my-question-bank --format obsidian --out ./dist/my-question-bank-obsidian
 ```
 
 校验默认使用 `draft` 模式，适合日常录入和编辑。下面的例子会检查发布审核条件：
@@ -163,14 +164,14 @@ oqb init [目录]
 oqb validate [目录] [--mode draft|strict|release]
 oqb stats [目录] [--mode draft|strict|release]
 oqb doctor [目录] [--mode draft|strict|release]
-oqb export [目录] [--format json|github-markdown] [--out <目录>] [--mode draft|strict|release]
+oqb export [目录] [--format json|github-markdown|obsidian] [--out <目录>] [--mode draft|strict|release]
 ```
 
 - `init` 从仓库模板创建题库。省略目录时使用当前目录；目标目录必须不存在或为空。
 - `validate` 打印错误、警告、文件位置和修复建议。错误或致命错误使命令以退出码 `1` 结束。
 - `stats` 按指定模式统计考点、知识、题目、题组和试卷；统计的是校验器保留的结构有效实体。
 - `doctor` 检查 Node.js 版本、`bank.yaml` 加载结果和题库校验状态。
-- `export` 先校验题库，再按所选格式生成数据包和 `manifest.json`。格式默认为 `json`，也可以选择 `github-markdown`。输出目录默认为命令运行目录下的 `dist`；也可以使用 `--out` 指定路径。`--mode release` 只导出通过发布筛选和最终引用校验的数据。
+- `export` 先校验题库，再按所选格式生成数据包和 `manifest.json`。格式默认为 `json`，也可以选择 `github-markdown` 或 `obsidian`。输出目录默认为命令运行目录下的 `dist`；也可以使用 `--out` 指定路径。`--mode release` 只导出通过发布筛选和最终引用校验的数据。
 - 未知命令、参数错误或执行错误使用退出码 `2`；通过使用退出码 `0`。警告不会单独导致校验失败。
 
 所有命令支持 `--help`，目录参数默认为当前目录。CLI 不要求交互输入，可用于本地脚本或 CI。
@@ -199,6 +200,18 @@ pnpm oqb export ../my-question-bank --format github-markdown --out ./dist/my-que
 
 导出的相对链接可随整个目录一起移动；如果要发布到 GitHub Pages，仍需按实际站点配置检查 Pages 的访问路径和 GitHub 对 Markdown / HTML 的渲染策略。格式、页面映射和可复现约定见 [GitHub Markdown 导出说明](docs/export-github-markdown.md)。
 
+### 导出 Obsidian Vault
+
+将题库生成可由 Obsidian 直接打开的 Vault：
+
+```sh
+pnpm oqb export ../my-question-bank --format obsidian --out ./dist/my-question-bank-obsidian
+```
+
+输出包含题库总览、考点 / 知识 / 题目 / 题组 / 试卷索引、实体独立页面、引用的资源文件和 `manifest.json`。页面按稳定 ID 命名，实体关系及 `oqb://` 正文引用转换为 Obsidian Wiki 链接；图片资源以嵌入链接呈现，其他资源以 Wiki 链接呈现。导出目录可以直接在 Obsidian 中作为 Vault 打开，也可以随目录移动。
+
+`--mode release` 会沿用发布筛选，仅导出审核和授权条件通过且引用关系完整的数据。清单记录题库版本、实体统计，以及每个 Markdown 和资源文件的大小及 SHA-256。使用方法、路径映射和清单格式见 [Obsidian Vault 导出说明](docs/export-obsidian-vault.md)。
+
 ## 建议的维护流程
 
 1. 使用 `oqb init` 创建独立题库仓库，修改 `bank.yaml` 中的题库 ID、名称、维护者、版本和许可证。
@@ -226,15 +239,15 @@ Schema 检查单个实体的字段结构；重复 ID、引用目标是否存在�
 
 不代表。Core 只按保守规则检查审核状态和授权字段是否完整，不会判断内容权利归属、许可条款效力或许可兼容性。发布者仍需确认自己拥有发布权限。
 
-### 是否可以直接导出到 Obsidian 或 Notion？
+### 是否可以导出到 Obsidian 或 Notion？
 
-当前版本可以导出标准 JSON 数据包和 GitHub Markdown 阅读包；Obsidian 与 Notion 导出器仍在后续开发计划中。标准数据格式不包含平台专属链接，导出器负责生成目标平台可用的链接。
+当前版本可以导出标准 JSON 数据包、GitHub Markdown 阅读包和 Obsidian Vault。Notion 导出器仍在后续开发计划中。标准数据格式不包含平台专属链接，导出器负责生成目标平台可用的链接。
 
 ## 当前能力边界
 
-已实现：Schema 1.0、YAML / Markdown 读取、结构和语义校验、资源检查、题库索引、审核授权模式、初始化模板、CLI 校验 / 统计 / 诊断、标准 JSON 导出、GitHub Markdown 阅读包和发布清单。
+已实现：Schema 1.0、YAML / Markdown 读取、结构和语义校验、资源检查、题库索引、审核授权模式、初始化模板、CLI 校验 / 统计 / 诊断、标准 JSON 导出、GitHub Markdown 阅读包、Obsidian Vault 和发布清单。
 
-尚未实现：规则组卷执行、自动评分、质量审核规则、Obsidian / Notion 导出、在线刷题、账号、数据库和学习记录。项目架构和职责边界见 [架构说明](docs/architecture.md)。
+尚未实现：Notion 导出、规则组卷执行、自动评分、质量审核规则、在线刷题、账号、数据库和学习记录。项目架构和职责边界见 [架构说明](docs/architecture.md)。
 
 ## 开发与贡献
 

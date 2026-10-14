@@ -17,3 +17,13 @@ export {
   writeQuestionBankGithubMarkdownExport,
   type WrittenGithubMarkdownExport,
 } from './github-markdown-writer.js';
+export {
+  createQuestionBankObsidianVaultExport,
+  getQuestionBankObsidianVaultFilePaths,
+  type ObsidianVaultExportManifest,
+  type ObsidianVaultExportPackage,
+} from './obsidian-vault.js';
+export {
+  writeQuestionBankObsidianVaultExport,
+  type WrittenObsidianVaultExport,
+} from './obsidian-vault-writer.js';

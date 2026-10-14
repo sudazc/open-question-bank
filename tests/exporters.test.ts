@@ -4,6 +4,7 @@ import type { QuestionBankData } from '../packages/core/src/types.js';
 import {
   createQuestionBankGithubMarkdownExport,
   createQuestionBankJsonExport,
+  createQuestionBankObsidianVaultExport,
 } from '../packages/exporters/src/index.js';
 import { bank, exams, knowledge, questions, questionGroup, topic } from './fixtures.js';
 
@@ -200,6 +201,96 @@ describe('OpenQuestionBank GitHub Markdown 导出器', () => {
     };
 
     expect(() => createQuestionBankGithubMarkdownExport(broken, assets)).toThrow(
+      '导出引用目标不存在或类型不匹配',
+    );
+  });
+});
+
+describe('OpenQuestionBank Obsidian Vault 导出器', () => {
+  it('生成 Wiki 链接、图片嵌入和含 SHA-256 的发布清单', () => {
+    const obsidianData: QuestionBankData = {
+      ...data,
+      knowledge: [
+        {
+          ...knowledge,
+          body: [
+            '[关联题目](oqb://question/question-single-choice)',
+            '![三角形](assets/triangle.svg?view=raw#preview)',
+            '[资源文件](assets/triangle.svg)',
+            '[path_name](assets/triangle.svg)',
+            '`[行内代码](../questions/id-question-single-choice.md)`',
+            '```md\n[代码示例](oqb://question/question-single-choice)\n```',
+          ].join('\n\n'),
+        },
+      ],
+    };
+
+    const exported = createQuestionBankObsidianVaultExport(obsidianData, assets);
+    const knowledgeContents = exported.files.find(
+      ({ path }) => path === 'knowledge/id-knowledge-foundations.md',
+    )?.contents;
+
+    expect(knowledgeContents).toContain('[[questions/id-question-single-choice|关联题目]]');
+    expect(knowledgeContents).toContain('![[assets/triangle.svg#preview]]');
+    expect(knowledgeContents).toContain('[[assets/triangle.svg|资源文件]]');
+    expect(knowledgeContents).toContain('[[assets/triangle.svg|path_name]]');
+    expect(knowledgeContents).toContain('`[行内代码](../questions/id-question-single-choice.md)`');
+    expect(knowledgeContents).toContain(
+      '```md\n[代码示例](oqb://question/question-single-choice)\n```',
+    );
+    expect(exported.files.find(({ path }) => path === 'README.md')?.contents).toContain(
+      '[[topics/README|考点（1）]]',
+    );
+    expect(exported.manifest).toMatchObject({
+      format: 'openquestionbank-obsidian-vault',
+      formatVersion: '1.0.0',
+      schemaVersion: '1.0.0',
+      bank: { id: bank.id, name: bank.name, version: bank.version },
+      statistics: {
+        entities: { bank: 1, topics: 1, knowledge: 1, questions: 6, groups: 1, exams: 3 },
+        totalEntities: 13,
+      },
+    });
+    expect(exported.manifest.files).toContainEqual({
+      path: 'knowledge/id-knowledge-foundations.md',
+      sizeBytes: Buffer.byteLength(knowledgeContents ?? '', 'utf8'),
+      sha256: createHash('sha256')
+        .update(knowledgeContents ?? '', 'utf8')
+        .digest('hex'),
+    });
+    expect(exported.manifest.files).toContainEqual({
+      path: 'assets/triangle.svg',
+      sizeBytes: assetContents.byteLength,
+      sha256: assets[0]?.sha256,
+    });
+    expect(exported.files.find(({ path }) => path === 'README.md')?.contents).not.toContain(
+      'GitHub',
+    );
+  });
+
+  it('对实体输入顺序变化保持相同输出', () => {
+    const reordered = createQuestionBankObsidianVaultExport(
+      {
+        ...data,
+        topics: [...data.topics].reverse(),
+        knowledge: [...data.knowledge].reverse(),
+        questions: [...data.questions].reverse(),
+        groups: [...data.groups].reverse(),
+        exams: [...data.exams].reverse(),
+      },
+      assets,
+    );
+
+    expect(reordered.files).toEqual(createQuestionBankObsidianVaultExport(data, assets).files);
+  });
+
+  it('拒绝悬空或类型错误的正文引用', () => {
+    const broken: QuestionBankData = {
+      ...data,
+      knowledge: [{ ...knowledge, body: '[失效](oqb://question/missing-question)' }],
+    };
+
+    expect(() => createQuestionBankObsidianVaultExport(broken, assets)).toThrow(
       '导出引用目标不存在或类型不匹配',
     );
   });

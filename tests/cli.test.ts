@@ -179,6 +179,43 @@ describe('OpenQuestionBank CLI', () => {
     expect(stdout.join('\n')).toContain('GitHub Markdown 导出完成');
   });
 
+  it('校验后生成 Obsidian Vault 和可复现清单', async () => {
+    const bankDir = join(rootDir, 'bank');
+    const exportDir = join(rootDir, 'dist', 'obsidian');
+    await runCli(['init', bankDir], output);
+
+    const firstExitCode = await runCli(
+      ['export', bankDir, '--format', 'obsidian', '--out', exportDir],
+      output,
+    );
+    expect(firstExitCode, stderr.join('\n')).toBe(0);
+    const readme = await readFile(join(exportDir, 'README.md'), 'utf8');
+    const questionPage = await readFile(
+      join(exportDir, 'questions', 'id-question-example.md'),
+      'utf8',
+    );
+    const firstManifest = await readFile(join(exportDir, 'manifest.json'), 'utf8');
+    const secondExitCode = await runCli(
+      ['export', bankDir, '--format', 'obsidian', '--out', exportDir],
+      output,
+    );
+
+    expect(firstExitCode).toBe(0);
+    expect(secondExitCode).toBe(0);
+    expect(readme).toContain('[[topics/README|考点（1）]]');
+    expect(questionPage).toContain('[[topics/id-topic-foundations|基础知识]]');
+    expect(questionPage).toContain('[[knowledge/id-knowledge-getting-started|示例知识点]]');
+    expect(JSON.parse(firstManifest)).toMatchObject({
+      format: 'openquestionbank-obsidian-vault',
+      formatVersion: '1.0.0',
+      bank: { id: 'my-question-bank', version: '0.1.0' },
+      statistics: { totalEntities: 4 },
+    });
+    expect(await readFile(join(exportDir, 'README.md'), 'utf8')).toBe(readme);
+    expect(await readFile(join(exportDir, 'manifest.json'), 'utf8')).toBe(firstManifest);
+    expect(stdout.join('\n')).toContain('Obsidian Vault 导出完成');
+  });
+
   it('校验失败时不生成导出文件', async () => {
     const bankDir = join(rootDir, 'bank');
     const exportDir = join(rootDir, 'dist');
@@ -227,6 +264,7 @@ describe('OpenQuestionBank CLI', () => {
     expect(await runCli(['--help'], output)).toBe(0);
     expect(stdout.join('\n')).toContain('oqb validate');
     expect(stdout.join('\n')).toContain('github-markdown');
+    expect(stdout.join('\n')).toContain('obsidian');
 
     const exitCode = await runCli(['validate', rootDir, '--mode', 'invalid'], output);
 
