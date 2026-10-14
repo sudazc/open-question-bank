@@ -1,0 +1,39 @@
+import type { QuestionBankData } from '@openquestionbank/core';
+import {
+  collectExportAssetSources,
+  copyExportAssets,
+  prepareExportDirectory,
+  writeExportFiles,
+} from './export-writer.js';
+import {
+  createQuestionBankGithubMarkdownExport,
+  getQuestionBankGithubMarkdownFilePaths,
+} from './github-markdown.js';
+
+export interface WrittenGithubMarkdownExport {
+  manifest: ReturnType<typeof createQuestionBankGithubMarkdownExport>['manifest'];
+  outputDirectory: string;
+}
+
+/** 将题库渲染为 GitHub Markdown 页面并写入导出目录 */
+export async function writeQuestionBankGithubMarkdownExport(
+  data: QuestionBankData,
+  sourceDirectory: string,
+  outputDirectory: string,
+): Promise<WrittenGithubMarkdownExport> {
+  const bank = data.bank;
+  if (!bank) {
+    throw new Error('GitHub Markdown 导出要求存在有效的 Bank 实体');
+  }
+
+  const assetSources = await collectExportAssetSources(sourceDirectory, data, bank);
+  const targetDirectory = await prepareExportDirectory(sourceDirectory, outputDirectory, bank, [
+    ...getQuestionBankGithubMarkdownFilePaths(data),
+    ...assetSources.map(({ path }) => path),
+  ]);
+  const assets = await copyExportAssets(assetSources, targetDirectory);
+  const exported = createQuestionBankGithubMarkdownExport(data, assets);
+  await writeExportFiles(targetDirectory, exported.files);
+
+  return { manifest: exported.manifest, outputDirectory: targetDirectory };
+}

@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
-import { isAbsolute, win32 } from 'node:path';
 import type { Bank } from '@openquestionbank/schema';
 import type { QuestionBankData } from '@openquestionbank/core';
+import { normalizeExportAssets, type ExportAsset } from './export-common.js';
 
 const format = 'openquestionbank-json';
 const formatVersion = '1.0.0';
@@ -18,11 +18,7 @@ export interface JsonExportFile {
   contents: string;
 }
 
-export interface JsonExportAsset {
-  path: string;
-  sizeBytes: number;
-  sha256: string;
-}
+export type JsonExportAsset = ExportAsset;
 
 export interface JsonExportManifest {
   format: typeof format;
@@ -65,32 +61,7 @@ export function createQuestionBankJsonExport(
     throw new Error('标准 JSON 导出要求存在有效的 Bank 实体');
   }
 
-  const assetsByPath = new Map<string, JsonExportAsset>();
-  for (const asset of assets) {
-    assertSafeAssetPath(asset.path);
-    if (!Number.isSafeInteger(asset.sizeBytes) || asset.sizeBytes < 0) {
-      throw new Error(`资源文件大小无效：${asset.path}`);
-    }
-    if (!/^[0-9a-f]{64}$/.test(asset.sha256)) {
-      throw new Error(`资源文件 SHA-256 无效：${asset.path}`);
-    }
-    if (assetsByPath.has(asset.path)) {
-      throw new Error(`导出资源路径重复：${asset.path}`);
-    }
-    assetsByPath.set(asset.path, asset);
-  }
-
-  const referencedAssets = collectReferencedAssets(data);
-  for (const path of referencedAssets) {
-    if (!assetsByPath.has(path)) {
-      throw new Error(`缺少题库引用的资源文件：${path}`);
-    }
-  }
-  for (const path of assetsByPath.keys()) {
-    if (!referencedAssets.has(path)) {
-      throw new Error(`导出资源未被题库实体引用：${path}`);
-    }
-  }
+  const normalizedAssets = normalizeExportAssets(data, assets);
 
   const bank = data.bank;
   const document: QuestionBankJsonDocument = {
@@ -132,42 +103,15 @@ export function createQuestionBankJsonExport(
         sizeBytes: Buffer.byteLength(contents, 'utf8'),
         sha256: createHash('sha256').update(contents, 'utf8').digest('hex'),
       })),
-      ...assetsByPath.values(),
+      ...normalizedAssets,
     ].sort((left, right) => compareStrings(left.path, right.path)),
   };
 
   return {
     manifest,
     files: [...dataFiles, { path: 'manifest.json', contents: stableJson(manifest) }],
-    assets: [...assetsByPath.values()].sort((left, right) => compareStrings(left.path, right.path)),
+    assets: normalizedAssets,
   };
-}
-
-function collectReferencedAssets(data: QuestionBankData): Set<string> {
-  const paths = new Set<string>();
-  const entities = [...data.knowledge, ...data.questions, ...data.groups];
-  for (const entity of entities) {
-    for (const path of entity.assets ?? []) {
-      assertSafeAssetPath(path);
-      paths.add(path);
-    }
-  }
-  return paths;
-}
-
-function assertSafeAssetPath(path: string): void {
-  const segments = path.split('/');
-  if (
-    path.includes('\0') ||
-    path.includes(':') ||
-    path.includes('\\') ||
-    isAbsolute(path) ||
-    win32.isAbsolute(path) ||
-    segments.length === 0 ||
-    segments.some((segment) => segment === '' || segment === '.' || segment === '..')
-  ) {
-    throw new Error(`题库资源路径不安全：${path}`);
-  }
 }
 
 function sortById<T extends { id: string }>(entities: T[]): T[] {

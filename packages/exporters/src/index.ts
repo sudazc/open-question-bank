@@ -7,3 +7,13 @@ export {
   type QuestionBankJsonDocument,
 } from './json.js';
 export { writeQuestionBankJsonExport, type WrittenJsonExport } from './json-writer.js';
+export {
+  createQuestionBankGithubMarkdownExport,
+  getQuestionBankGithubMarkdownFilePaths,
+  type GithubMarkdownExportManifest,
+  type GithubMarkdownExportPackage,
+} from './github-markdown.js';
+export {
+  writeQuestionBankGithubMarkdownExport,
+  type WrittenGithubMarkdownExport,
+} from './github-markdown-writer.js';

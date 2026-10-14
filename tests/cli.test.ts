@@ -130,6 +130,55 @@ describe('OpenQuestionBank CLI', () => {
     expect(stdout.join('\n')).toContain('JSON 导出完成');
   });
 
+  it('校验后生成 GitHub Markdown 阅读包和可复现清单', async () => {
+    const bankDir = join(rootDir, 'bank');
+    const exportDir = join(rootDir, 'dist', 'github');
+    await runCli(['init', bankDir], output);
+    const questionFile = join(bankDir, 'questions', 'example.yaml');
+    const question = (await readFile(questionFile, 'utf8')).replace(
+      'explanation: 题库内容以 YAML 和 Markdown 文件保存，可使用 Git 管理变更。',
+      'explanation: "[参考资源](assets/example.txt)"',
+    );
+    await writeFile(join(bankDir, 'assets', 'example.txt'), '资源文件内容');
+    await writeFile(
+      join(bankDir, 'questions', 'example.yaml'),
+      `${question}\nassets: [assets/example.txt]\n`,
+    );
+
+    const firstExitCode = await runCli(
+      ['export', bankDir, '--format', 'github-markdown', '--out', exportDir],
+      output,
+    );
+    const readme = await readFile(join(exportDir, 'README.md'), 'utf8');
+    const questionPage = await readFile(
+      join(exportDir, 'questions', 'id-question-example.md'),
+      'utf8',
+    );
+    const manifest = await readFile(join(exportDir, 'manifest.json'), 'utf8');
+    const firstReadme = readme;
+    const firstManifest = manifest;
+    const secondExitCode = await runCli(
+      ['export', bankDir, '--format', 'github-markdown', '--out', exportDir],
+      output,
+    );
+
+    expect(firstExitCode).toBe(0);
+    expect(secondExitCode).toBe(0);
+    expect(readme).toContain('[题目（1）](questions/README.md)');
+    expect(questionPage).toContain('[参考资源](../assets/example.txt)');
+    expect(questionPage).toContain('[基础知识](../topics/id-topic-foundations.md)');
+    expect(questionPage).toContain('[示例知识点](../knowledge/id-knowledge-getting-started.md)');
+    expect(JSON.parse(manifest)).toMatchObject({
+      format: 'openquestionbank-github-markdown',
+      formatVersion: '1.0.0',
+      bank: { id: 'my-question-bank', version: '0.1.0' },
+      statistics: { totalEntities: 4 },
+    });
+    expect(await readFile(join(exportDir, 'README.md'), 'utf8')).toBe(firstReadme);
+    expect(await readFile(join(exportDir, 'manifest.json'), 'utf8')).toBe(firstManifest);
+    expect(stdout.join('\n')).toContain('GitHub Markdown 导出完成');
+  });
+
   it('校验失败时不生成导出文件', async () => {
     const bankDir = join(rootDir, 'bank');
     const exportDir = join(rootDir, 'dist');
@@ -159,9 +208,25 @@ describe('OpenQuestionBank CLI', () => {
     expect(stderr.join('\n')).toContain('题库源数据目录');
   });
 
+  it('拒绝把 GitHub Markdown 导出写回题库根目录', async () => {
+    const bankDir = join(rootDir, 'bank');
+    await runCli(['init', bankDir], output);
+    const sourceReadme = await readFile(join(bankDir, 'README.md'), 'utf8');
+
+    const exitCode = await runCli(
+      ['export', bankDir, '--format', 'github-markdown', '--out', bankDir],
+      output,
+    );
+
+    expect(exitCode).toBe(2);
+    expect(await readFile(join(bankDir, 'README.md'), 'utf8')).toBe(sourceReadme);
+    expect(stderr.join('\n')).toContain('不能与题库根目录相同');
+  });
+
   it('显示帮助并拒绝未知校验模式', async () => {
     expect(await runCli(['--help'], output)).toBe(0);
     expect(stdout.join('\n')).toContain('oqb validate');
+    expect(stdout.join('\n')).toContain('github-markdown');
 
     const exitCode = await runCli(['validate', rootDir, '--mode', 'invalid'], output);
 

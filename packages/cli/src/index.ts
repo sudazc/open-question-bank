@@ -9,9 +9,13 @@ import {
   type Diagnostic,
   type ValidationMode,
 } from '@openquestionbank/core';
-import { writeQuestionBankJsonExport } from '@openquestionbank/exporters';
+import {
+  writeQuestionBankGithubMarkdownExport,
+  writeQuestionBankJsonExport,
+} from '@openquestionbank/exporters';
 
 const validationModes = ['draft', 'strict', 'release'] as const satisfies readonly ValidationMode[];
+const exportFormats = ['json', 'github-markdown'] as const;
 const templateRoot = resolve(
   dirname(fileURLToPath(import.meta.url)),
   '../../../templates/question-bank',
@@ -81,16 +85,16 @@ export async function runCli(
 
   const formatValue = values.format;
   if (formatValue !== undefined && typeof formatValue !== 'string') {
-    output.stderr('--format 必须指定 json');
-    return 2;
-  }
-  if (command === 'export' && formatValue !== undefined && formatValue !== 'json') {
-    output.stderr(`暂不支持导出格式：${formatValue}`);
-    output.stderr('当前可用格式：json');
+    output.stderr('--format 必须指定 json 或 github-markdown');
     return 2;
   }
   if (command !== 'export' && formatValue !== undefined) {
     output.stderr('--format 仅用于 export 命令');
+    return 2;
+  }
+  if (command === 'export' && formatValue !== undefined && !isExportFormat(formatValue)) {
+    output.stderr(`暂不支持导出格式：${formatValue}`);
+    output.stderr(`当前可用格式：${exportFormats.join('、')}`);
     return 2;
   }
 
@@ -121,7 +125,13 @@ export async function runCli(
       case 'doctor':
         return await doctorCommand(directory, mode, output);
       case 'export':
-        return await exportCommand(directory, mode, outputDirectory ?? 'dist', output);
+        return await exportCommand(
+          directory,
+          mode,
+          isExportFormat(formatValue) ? formatValue : 'json',
+          outputDirectory ?? 'dist',
+          output,
+        );
       default:
         output.stderr(`未知命令：${command}`);
         output.stderr('运行 `oqb --help` 查看可用命令');
@@ -255,6 +265,7 @@ async function doctorCommand(
 async function exportCommand(
   directory: string,
   mode: ValidationMode,
+  format: (typeof exportFormats)[number],
   outputDirectory: string,
   output: CliOutput,
 ): Promise<number> {
@@ -272,11 +283,21 @@ async function exportCommand(
     return 1;
   }
 
-  const exported = await writeQuestionBankJsonExport(result.data, root, outputDirectory);
-
-  output.stdout(`JSON 导出完成：${exported.outputDirectory}`);
-  output.stdout(`数据文件：${join(exported.outputDirectory, 'question-bank.json')}`);
-  output.stdout(`发布清单：${join(exported.outputDirectory, 'manifest.json')}`);
+  if (format === 'github-markdown') {
+    const exported = await writeQuestionBankGithubMarkdownExport(
+      result.data,
+      root,
+      outputDirectory,
+    );
+    output.stdout(`GitHub Markdown 导出完成：${exported.outputDirectory}`);
+    output.stdout(`入口文件：${join(exported.outputDirectory, 'README.md')}`);
+    output.stdout(`发布清单：${join(exported.outputDirectory, 'manifest.json')}`);
+  } else {
+    const exported = await writeQuestionBankJsonExport(result.data, root, outputDirectory);
+    output.stdout(`JSON 导出完成：${exported.outputDirectory}`);
+    output.stdout(`数据文件：${join(exported.outputDirectory, 'question-bank.json')}`);
+    output.stdout(`发布清单：${join(exported.outputDirectory, 'manifest.json')}`);
+  }
   return 0;
 }
 
@@ -333,6 +354,10 @@ function isValidationMode(value: string): value is ValidationMode {
   return validationModes.some((mode) => mode === value);
 }
 
+function isExportFormat(value: string | undefined): value is (typeof exportFormats)[number] {
+  return value !== undefined && exportFormats.some((format) => format === value);
+}
+
 function isSupportedNode(version: string): boolean {
   const [major = 0, minor = 0] = version.split('.').map(Number);
   return major > 22 || (major === 22 && minor >= 13);
@@ -358,7 +383,7 @@ function printHelp(output: CliOutput): void {
   oqb validate [目录] [--mode draft|strict|release]
   oqb stats [目录] [--mode draft|strict|release]
   oqb doctor [目录] [--mode draft|strict|release]
-  oqb export [目录] [--format json] [--out <目录>] [--mode draft|strict|release]
+  oqb export [目录] [--format json|github-markdown] [--out <目录>] [--mode draft|strict|release]
   oqb --help
 
 命令：
@@ -366,11 +391,11 @@ function printHelp(output: CliOutput): void {
   validate  校验题库结构、引用、资源及审核授权要求
   stats     统计当前模式下保留的有效题库实体
   doctor    检查 Node.js 环境、bank.yaml 和题库校验结果
-  export    校验题库后生成标准 JSON 数据包和发布清单
+  export    校验题库后生成标准 JSON 或 GitHub Markdown 阅读包
 
 选项：
   -m, --mode <模式>  校验模式，默认为 draft
-  -f, --format <格式> 导出格式，当前支持 json
+  -f, --format <格式> 导出格式，支持 json、github-markdown
   -o, --out <目录>   导出目录，默认为当前目录下的 dist
   -h, --help         显示帮助信息
 

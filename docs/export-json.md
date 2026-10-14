@@ -9,11 +9,11 @@ oqb export ./my-question-bank --format json --out ./dist/my-question-bank
 ```
 
 - `目录` 默认为当前目录。
-- `--format` 当前只接受 `json`，省略时也使用 JSON。
+- 本文描述 `--format json`。CLI 还支持 `github-markdown`，省略 `--format` 时默认使用 JSON；另一种格式见 [GitHub Markdown 导出说明](export-github-markdown.md)。
 - `--out` 默认为运行命令时当前目录下的 `dist`。
 - `--mode` 沿用 `draft`、`strict`、`release` 校验模式，默认是 `draft`。
 - 校验存在错误或致命错误时，命令返回退出码 `1`，不会生成导出文件。警告不会单独阻止导出。
-- 输出目录不能位于 `bank.yaml` 配置的实体或资源目录内，避免导出文件混入源数据。
+- 输出目录不能与题库根目录相同，也不能位于 `bank.yaml` 配置的实体或资源目录内，避免导出文件混入或覆盖源数据。
 
 例如，只有通过发布资格检查的数据才会进入导出包：
 
