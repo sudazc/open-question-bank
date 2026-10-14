@@ -297,7 +297,7 @@ describe('OpenQuestionBank CLI', () => {
 
     expect(exitCode).toBe(2);
     expect(await readFile(join(bankDir, 'README.md'), 'utf8')).toBe(sourceReadme);
-    expect(stderr.join('\n')).toContain('不能与题库根目录相同');
+    expect(stderr.join('\n')).toContain('导出目录不能');
   });
 
   it('显示帮助并拒绝未知校验模式', async () => {
