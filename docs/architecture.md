@@ -8,7 +8,7 @@ schema → core → cli
 ```
 
 - `schema` 定义与展示平台无关的数据合同、JSON Schema 和 TypeScript 类型，不负责读文件或扫描题库。
-- `core` 后续负责文件发现与加载、YAML 和 Markdown 解析、标准化、结构及语义校验、实体关联、索引、组卷和诊断。当前只保留最小包入口。
+- `core` 负责 `bank.yaml` 和实体文件发现、YAML 与 Markdown Front Matter 解析、结构及语义校验、实体关联、索引、资源完整性和审核授权校验。规则组卷执行与内容质量检查仍待实现。
 - `cli` 后续负责 `oqb` 命令、参数解析、初始化、校验、构建、导出和终端反馈。当前未实现命令。
 - `exporters` 后续从统一内部数据模型生成 GitHub Markdown、Obsidian、Notion 导入包和标准 JSON。当前只保留最小包入口。
 
@@ -23,11 +23,11 @@ JSON Schema 负责单实体结构：必填字段、字段类型、题型判别�
 - 题目选项 ID、填空 ID、题组子题和组卷引用之间的关联正确。
 - `oqb://` 引用有效，发布过滤后没有悬空链接。
 - 资源真实存在、路径解析后仍位于题库根目录内，并处理符号链接。
-- 内容质量、审核状态、来源授权和最终发布资格。
+- 内容质量及许可证兼容性；审核状态和授权信息按 Core 发布模式执行保守校验。
 - 规则组卷数量充足、抽样可复现以及算法版本符合要求。
 
-JSON Schema 不执行题库内容中的代码。Markdown 和资源的安全解析、大小限制、HTML 处理及 SVG 策略由后续 `core` 实现。
+JSON Schema 不执行题库内容中的代码。Core 将实体文件限制为 UTF-8，默认单文件上限为 2 MiB、实体文件上限为 10,000 个、目录嵌套上限为 32 层，并检查题库目录路径和符号链接的根目录边界。HTML 过滤、SVG 策略、内容质量和许可证兼容性检查仍待后续实现。
 
 ## 当前交付边界
 
-本阶段包含 Workspace 配置、工程规范、Schema 1.0、TypeScript 类型、Ajv/Vitest 样例与基础文档。解析器、校验引擎、CLI、具体导出器、初始化模板和 GitHub Actions 属于后续阶段。
+当前阶段包含 Workspace 配置、工程规范、Schema 1.0、TypeScript 类型、Core 读取与校验 API、Ajv/Vitest 样例和基础文档。CLI、组卷执行、具体导出器、初始化模板和 GitHub Actions 属于后续阶段。

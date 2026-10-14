@@ -21,7 +21,7 @@ Markdown 知识文件的 YAML Front Matter 存放 `Knowledge` 元数据，正文
 - `Bank.version` 使用完整 SemVer；`schemaVersion` 对应数据合同版本，目前固定为 `1.0.0`。
 - 每个 `Question` 和 `Knowledge` 都要求 `source` 与 `review`。`QuestionGroup` 也要求这两个字段。来源和审核状态使用 Schema 中列出的枚举。
 - `official_public` 只描述来源类型，不表示取得转载或再发布许可。授权判断属于发布校验。
-- `Bank.license` 和 `source.license` 当前只要求非空字符串；P0 未规定 SPDX 标识符还是 SPDX 表达式，Schema 1.0 不做许可证语法校验。正式发布前应确定统一格式并由 `core` 校验。
+- `Bank.license` 和 `source.license` 当前只要求非空字符串；P0 未规定 SPDX 标识符还是 SPDX 表达式，Schema 1.0 和 Core 都不解析许可证语法。Core 的 release 模式检查许可证和署名信息是否明确填写，但不判断许可证兼容性或实际授权效力。
 - `extensions` 为对象，用于命名空间扩展；不得覆盖或重新解释标准字段。
 - `topicIds`、`knowledgeIds` 等 ID 数组禁止完全重复项。实体是否存在以及 ID 是否与目标类型对应，由 `core` 检查。
 - 内容正文、题干、解析、材料和答案说明可使用 Markdown 文本。允许的 HTML、脚本和 SVG 安全策略不能由结构 Schema 保证。
