@@ -1,0 +1,637 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openquestionbank:schema:1.0.0",
+  "title": "OpenQuestionBank 1.0.0 entity schema",
+  "description": "Validates normalized OpenQuestionBank entities. Cross-entity and publication rules belong to the core semantic validator.",
+  "oneOf": [
+    { "$ref": "#/$defs/Bank" },
+    { "$ref": "#/$defs/Topic" },
+    { "$ref": "#/$defs/Knowledge" },
+    { "$ref": "#/$defs/Question" },
+    { "$ref": "#/$defs/QuestionGroup" },
+    { "$ref": "#/$defs/Exam" }
+  ],
+  "$defs": {
+    "Id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+      "description": "Stable URI-safe identifier; it does not encode a file path"
+    },
+    "SemVer": {
+      "type": "string",
+      "maxLength": 128,
+      "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|\\d*[A-Za-z-][0-9A-Za-z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[A-Za-z-][0-9A-Za-z-]*))*))?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$"
+    },
+    "RelativePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512,
+      "pattern": "^(?!/)(?![A-Za-z]:)(?!.*(^|/)\\.\\.?(?:/|$))(?!.*\\\\).+$",
+      "description": "Bank-relative path using forward slashes; canonical containment and symlinks are checked by core"
+    },
+    "Extensions": {
+      "type": "object",
+      "description": "Namespaced extension data that does not change the meaning of standard fields"
+    },
+    "Source": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["original", "official_public", "licensed", "adapted", "unknown"]
+        },
+        "title": { "type": "string", "maxLength": 512 },
+        "author": { "type": "string", "maxLength": 512 },
+        "url": { "type": "string", "maxLength": 2048 },
+        "license": { "type": "string", "maxLength": 256 },
+        "attribution": { "type": "string", "maxLength": 4096 }
+      },
+      "additionalProperties": false
+    },
+    "Review": {
+      "type": "object",
+      "required": ["status"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["draft", "pending", "approved", "deprecated"]
+        },
+        "reviewer": { "type": "string", "maxLength": 256 },
+        "reviewedAt": { "type": "string", "maxLength": 64 },
+        "notes": { "type": "string", "maxLength": 4096 }
+      },
+      "additionalProperties": false
+    },
+    "Bank": {
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "id",
+        "name",
+        "version",
+        "language",
+        "license",
+        "maintainers",
+        "paths"
+      ],
+      "properties": {
+        "schemaVersion": { "const": "1.0.0" },
+        "id": { "$ref": "#/$defs/Id" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "description": { "type": "string", "maxLength": 4096 },
+        "version": { "$ref": "#/$defs/SemVer" },
+        "language": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$"
+        },
+        "license": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "maintainers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name"],
+            "properties": {
+              "name": { "type": "string", "minLength": 1, "maxLength": 256 },
+              "email": { "type": "string", "maxLength": 320 },
+              "url": { "type": "string", "maxLength": 2048 }
+            },
+            "additionalProperties": false
+          },
+          "uniqueItems": true
+        },
+        "examSystem": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "paths": {
+          "type": "object",
+          "required": ["topics", "knowledge", "questions", "groups", "exams", "assets"],
+          "properties": {
+            "topics": { "$ref": "#/$defs/RelativePath" },
+            "knowledge": { "$ref": "#/$defs/RelativePath" },
+            "questions": { "$ref": "#/$defs/RelativePath" },
+            "groups": { "$ref": "#/$defs/RelativePath" },
+            "exams": { "$ref": "#/$defs/RelativePath" },
+            "assets": { "$ref": "#/$defs/RelativePath" }
+          },
+          "additionalProperties": false
+        },
+        "extensions": { "$ref": "#/$defs/Extensions" }
+      },
+      "additionalProperties": false
+    },
+    "Topic": {
+      "type": "object",
+      "required": ["id", "name", "order"],
+      "properties": {
+        "id": { "$ref": "#/$defs/Id" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "parentId": { "$ref": "#/$defs/Id" },
+        "order": { "type": "integer", "minimum": 0 },
+        "description": { "type": "string", "maxLength": 4096 },
+        "aliases": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1, "maxLength": 256 },
+          "uniqueItems": true
+        },
+        "extensions": { "$ref": "#/$defs/Extensions" }
+      },
+      "additionalProperties": false
+    },
+    "Knowledge": {
+      "type": "object",
+      "required": [
+        "id",
+        "title",
+        "body",
+        "topicIds",
+        "prerequisiteIds",
+        "relatedIds",
+        "tags",
+        "source",
+        "review"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/Id" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "body": {
+          "type": "string",
+          "description": "Markdown body after front matter has been parsed"
+        },
+        "topicIds": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Id" },
+          "uniqueItems": true
+        },
+        "summary": { "type": "string", "maxLength": 4096 },
+        "prerequisiteIds": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Id" },
+          "uniqueItems": true
+        },
+        "relatedIds": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Id" },
+          "uniqueItems": true
+        },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1, "maxLength": 128 },
+          "uniqueItems": true
+        },
+        "assets": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/RelativePath" },
+          "uniqueItems": true
+        },
+        "source": { "$ref": "#/$defs/Source" },
+        "review": { "$ref": "#/$defs/Review" },
+        "extensions": { "$ref": "#/$defs/Extensions" }
+      },
+      "additionalProperties": false
+    },
+    "QuestionCommon": {
+      "type": "object",
+      "required": [
+        "id",
+        "stem",
+        "topicIds",
+        "knowledgeIds",
+        "difficulty",
+        "tags",
+        "score",
+        "source",
+        "review"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/Id" },
+        "stem": { "type": "string", "minLength": 1 },
+        "explanation": { "type": "string" },
+        "topicIds": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Id" },
+          "uniqueItems": true
+        },
+        "knowledgeIds": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Id" },
+          "uniqueItems": true
+        },
+        "difficulty": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "description": "Bank-defined difficulty label; V1 does not prescribe a scale"
+        },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1, "maxLength": 128 },
+          "uniqueItems": true
+        },
+        "score": { "type": "number", "minimum": 0 },
+        "source": { "$ref": "#/$defs/Source" },
+        "review": { "$ref": "#/$defs/Review" },
+        "assets": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/RelativePath" },
+          "uniqueItems": true
+        },
+        "extensions": { "$ref": "#/$defs/Extensions" }
+      }
+    },
+    "Choice": {
+      "type": "object",
+      "required": ["id", "text"],
+      "properties": {
+        "id": { "$ref": "#/$defs/Id" },
+        "text": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "SingleChoiceQuestion": {
+      "type": "object",
+      "allOf": [
+        { "$ref": "#/$defs/QuestionCommon" },
+        {
+          "type": "object",
+          "required": ["type", "choices", "answer"],
+          "properties": {
+            "type": { "const": "single_choice" },
+            "choices": { "type": "array", "minItems": 2, "items": { "$ref": "#/$defs/Choice" } },
+            "answer": {
+              "type": "object",
+              "required": ["choiceId"],
+              "properties": { "choiceId": { "$ref": "#/$defs/Id" } },
+              "additionalProperties": false
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "MultipleChoiceQuestion": {
+      "type": "object",
+      "allOf": [
+        { "$ref": "#/$defs/QuestionCommon" },
+        {
+          "type": "object",
+          "required": ["type", "choices", "answer"],
+          "properties": {
+            "type": { "const": "multiple_choice" },
+            "choices": { "type": "array", "minItems": 2, "items": { "$ref": "#/$defs/Choice" } },
+            "answer": {
+              "type": "object",
+              "required": ["choiceIds"],
+              "properties": {
+                "choiceIds": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": { "$ref": "#/$defs/Id" },
+                  "uniqueItems": true
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "TrueFalseQuestion": {
+      "type": "object",
+      "allOf": [
+        { "$ref": "#/$defs/QuestionCommon" },
+        {
+          "type": "object",
+          "required": ["type", "answer"],
+          "properties": {
+            "type": { "const": "true_false" },
+            "answer": { "type": "boolean" }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "FillBlankQuestion": {
+      "type": "object",
+      "allOf": [
+        { "$ref": "#/$defs/QuestionCommon" },
+        {
+          "type": "object",
+          "required": ["type", "answer"],
+          "properties": {
+            "type": { "const": "fill_blank" },
+            "answer": {
+              "type": "object",
+              "required": ["blanks"],
+              "properties": {
+                "blanks": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "object",
+                    "required": ["id", "acceptedAnswers"],
+                    "properties": {
+                      "id": { "$ref": "#/$defs/Id" },
+                      "acceptedAnswers": {
+                        "type": "array",
+                        "minItems": 1,
+                        "items": { "type": "string", "minLength": 1 },
+                        "uniqueItems": true
+                      },
+                      "caseSensitive": { "type": "boolean", "default": false },
+                      "whitespace": {
+                        "type": "string",
+                        "enum": ["exact", "trim", "collapse"],
+                        "default": "trim"
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "NumericQuestion": {
+      "type": "object",
+      "allOf": [
+        { "$ref": "#/$defs/QuestionCommon" },
+        {
+          "type": "object",
+          "required": ["type", "answer"],
+          "properties": {
+            "type": { "const": "numeric" },
+            "answer": {
+              "type": "object",
+              "required": ["value"],
+              "properties": {
+                "value": { "$ref": "#/$defs/DecimalString" },
+                "unit": { "type": "string", "minLength": 1, "maxLength": 64 }
+              },
+              "additionalProperties": false
+            },
+            "tolerance": {
+              "type": "object",
+              "properties": {
+                "absolute": { "$ref": "#/$defs/NonNegativeDecimalString", "default": "0" },
+                "relative": { "$ref": "#/$defs/NonNegativeDecimalString", "default": "0" }
+              },
+              "additionalProperties": false
+            },
+            "unitRule": {
+              "type": "object",
+              "required": ["mode"],
+              "properties": {
+                "mode": { "type": "string", "enum": ["required", "optional", "ignored"] },
+                "acceptedUnits": {
+                  "type": "array",
+                  "items": { "type": "string", "minLength": 1, "maxLength": 64 },
+                  "uniqueItems": true
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "ShortAnswerQuestion": {
+      "type": "object",
+      "allOf": [
+        { "$ref": "#/$defs/QuestionCommon" },
+        {
+          "type": "object",
+          "required": ["type", "answer"],
+          "properties": {
+            "type": { "const": "short_answer" },
+            "answer": {
+              "type": "object",
+              "required": ["referenceAnswer"],
+              "properties": {
+                "referenceAnswer": { "type": "string", "minLength": 1 },
+                "rubric": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "object",
+                    "required": ["id", "description", "score"],
+                    "properties": {
+                      "id": { "$ref": "#/$defs/Id" },
+                      "description": { "type": "string", "minLength": 1 },
+                      "score": { "type": "number", "minimum": 0 }
+                    },
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "DecimalString": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$"
+    },
+    "NonNegativeDecimalString": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^(?:0|[1-9]\\d*)(?:\\.\\d+)?$"
+    },
+    "Question": {
+      "oneOf": [
+        { "$ref": "#/$defs/SingleChoiceQuestion" },
+        { "$ref": "#/$defs/MultipleChoiceQuestion" },
+        { "$ref": "#/$defs/TrueFalseQuestion" },
+        { "$ref": "#/$defs/FillBlankQuestion" },
+        { "$ref": "#/$defs/NumericQuestion" },
+        { "$ref": "#/$defs/ShortAnswerQuestion" }
+      ]
+    },
+    "QuestionGroup": {
+      "type": "object",
+      "required": ["id", "title", "passage", "questionIds", "topicIds", "source", "review"],
+      "properties": {
+        "id": { "$ref": "#/$defs/Id" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "passage": { "type": "string" },
+        "questionIds": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/Id" },
+          "uniqueItems": true
+        },
+        "topicIds": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Id" },
+          "uniqueItems": true
+        },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1, "maxLength": 128 },
+          "uniqueItems": true
+        },
+        "assets": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/RelativePath" },
+          "uniqueItems": true
+        },
+        "source": { "$ref": "#/$defs/Source" },
+        "review": { "$ref": "#/$defs/Review" },
+        "extensions": { "$ref": "#/$defs/Extensions" }
+      },
+      "additionalProperties": false
+    },
+    "ExamQuestionItem": {
+      "type": "object",
+      "required": ["kind", "questionId", "score"],
+      "properties": {
+        "kind": { "const": "question" },
+        "questionId": { "$ref": "#/$defs/Id" },
+        "score": { "type": "number", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "ExamGroupItem": {
+      "type": "object",
+      "required": ["kind", "groupId", "questions"],
+      "properties": {
+        "kind": { "const": "group" },
+        "groupId": { "$ref": "#/$defs/Id" },
+        "questions": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/ExamQuestionItem" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "ExamItem": {
+      "oneOf": [{ "$ref": "#/$defs/ExamQuestionItem" }, { "$ref": "#/$defs/ExamGroupItem" }]
+    },
+    "ExamCommon": {
+      "type": "object",
+      "required": ["id", "title", "mode"],
+      "properties": {
+        "id": { "$ref": "#/$defs/Id" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "description": { "type": "string", "maxLength": 4096 },
+        "mode": { "type": "string", "enum": ["fixed", "generated"] },
+        "durationMinutes": { "type": "integer", "minimum": 1 },
+        "extensions": { "$ref": "#/$defs/Extensions" }
+      }
+    },
+    "FixedExam": {
+      "type": "object",
+      "allOf": [
+        { "$ref": "#/$defs/ExamCommon" },
+        {
+          "type": "object",
+          "required": ["mode", "items"],
+          "properties": {
+            "mode": { "const": "fixed" },
+            "items": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/ExamItem" } }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "SelectionFilters": {
+      "type": "object",
+      "properties": {
+        "topicIds": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Id" },
+          "uniqueItems": true
+        },
+        "questionTypes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "single_choice",
+              "multiple_choice",
+              "true_false",
+              "fill_blank",
+              "numeric",
+              "short_answer"
+            ]
+          },
+          "uniqueItems": true
+        },
+        "difficulty": { "type": "string", "minLength": 1, "maxLength": 64 }
+      },
+      "additionalProperties": false
+    },
+    "SelectionRule": {
+      "type": "object",
+      "required": ["unit", "count", "scorePerQuestion"],
+      "properties": {
+        "unit": { "type": "string", "enum": ["question", "group"] },
+        "count": { "type": "integer", "minimum": 1 },
+        "scorePerQuestion": { "type": "number", "minimum": 0 },
+        "filters": { "$ref": "#/$defs/SelectionFilters" }
+      },
+      "additionalProperties": false
+    },
+    "GeneratedExamTemplate": {
+      "type": "object",
+      "allOf": [
+        { "$ref": "#/$defs/ExamCommon" },
+        {
+          "type": "object",
+          "required": ["mode", "kind", "rules"],
+          "properties": {
+            "mode": { "const": "generated" },
+            "kind": { "const": "template" },
+            "rules": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "$ref": "#/$defs/SelectionRule" }
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "GeneratedExamResult": {
+      "type": "object",
+      "allOf": [
+        { "$ref": "#/$defs/ExamCommon" },
+        {
+          "type": "object",
+          "required": ["mode", "kind", "items", "randomSeed", "bankVersion", "algorithmVersion"],
+          "properties": {
+            "mode": { "const": "generated" },
+            "kind": { "const": "result" },
+            "items": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/ExamItem" } },
+            "randomSeed": { "type": "string", "minLength": 1, "maxLength": 128 },
+            "bankVersion": { "$ref": "#/$defs/SemVer" },
+            "algorithmVersion": { "$ref": "#/$defs/SemVer" }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "Exam": {
+      "oneOf": [
+        { "$ref": "#/$defs/FixedExam" },
+        { "$ref": "#/$defs/GeneratedExamTemplate" },
+        { "$ref": "#/$defs/GeneratedExamResult" }
+      ]
+    }
+  }
+}
