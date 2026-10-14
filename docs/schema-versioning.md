@@ -4,7 +4,10 @@
 
 - 数据合同版本写入每个 `Bank` 的 `schemaVersion`，格式使用 SemVer。
 - 当前合同为 `1.0.0`，Schema 文件位于 `packages/schema/src/schema/1.0.0/`，其 `$id` 为 `urn:openquestionbank:schema:1.0.0`。
-- NPM Workspace 包版本目前是 `0.1.0`，与数据合同版本独立；包发布策略将在 P4 确定。
+- 软件版本记录在根目录和所有 Workspace 包的 `package.json` 中，当前为 `0.1.0`。各包版本保持一致，Git 标签使用 `v<软件版本>`，例如 `v0.1.0`；CI 发布流程会检查标签和包版本一致。
+- 软件版本按 SemVer 管理。当前处于 `0.x` 开发期：patch 用于兼容性修复，minor 可以包含破坏性变更；到 `1.0.0` 后，破坏性软件接口变更提升 major，兼容能力增加提升 minor，兼容性修复提升 patch。
+- Workspace 包目前不发布到 npm。发布匹配版本标签后，GitHub Release 流程会生成包含已编译包、运行所需清单、模板和文档的 `prebuilt.tar.gz`，并附 SHA-256 校验文件；GitHub 也会为标签提供源码快照。
+- Schema 合同版本、软件版本和各导出格式版本分别管理。发布软件版本不会自动改变 `schemaVersion` 或导出格式版本；只有数据合同或导出文件合同发生相应变化时才更新各自版本。
 
 ## 兼容性规则
 
@@ -18,6 +21,12 @@
 1. 新版本新增独立版本目录、Schema 文档、TypeScript 类型和合法/非法/边界测试。
 2. 记录变更影响、迁移要求和版本兼容性结论。
 3. 兼容版本继续提供旧 Schema；破坏性版本提供迁移说明或迁移工具后再发布。
-4. 发布清单写明题库 `schemaVersion`、题库版本、抽题算法版本及产物校验值。
+4. 题库发布清单写明题库 `schemaVersion`、题库版本、抽题算法版本及题库数据产物校验值；框架软件 Release 单独记录软件版本和发布包 SHA-256。
+
+## 软件发布流程
+
+- Pull Request 和 `main` 分支提交会在 Linux、Windows、macOS 上安装锁定依赖，并运行类型检查、ESLint、构建、Vitest 和格式检查。
+- 推送 `v<软件版本>` 标签会触发 Release 流程。标签必须与根目录及全部 Workspace 包的版本一致；流程先运行同一套检查，再生成预构建压缩包、安装运行依赖并试用初始化与校验命令，最后附上 SHA-256 校验文件。
+- 发布包使用 pnpm workspace 格式，下载者需要安装 Node.js `>=22.13.0` 和 pnpm `11.25.0`。详细步骤见 [Release 下载与校验说明](release.md)。
 
 Schema 校验只负责单实体合同。跨实体约束的实现变化也需要评估是否会改变发布资格和已有题库的兼容行为。

@@ -38,6 +38,23 @@ https://github.com/sudazc/open-question-bank/blob/main/AI_GUIDE.md
 - Node.js `>=22.13.0`
 - pnpm `11.25.0`（版本由 `packageManager` 字段锁定）
 
+### 下载已构建版本
+
+后续版本发布后，可在 [GitHub Releases](https://github.com/sudazc/open-question-bank/releases) 下载 `openquestionbank-v<版本>-prebuilt.tar.gz`，解压后在目录内安装运行依赖：
+
+```sh
+tar -xzf openquestionbank-v0.1.0-prebuilt.tar.gz
+cd openquestionbank-v0.1.0
+pnpm install --prod --frozen-lockfile
+pnpm oqb --help
+pnpm oqb init ../my-question-bank
+pnpm oqb validate ../my-question-bank
+```
+
+发布包已包含编译后的 CLI、模板和文档；首次使用仍需联网安装运行依赖。每个 Release 同时提供 `SHA256SUMS`，下载后可按 [Release 下载与校验说明](docs/release.md) 验证文件。也可以从 Release 页面下载 GitHub 自动生成的源码快照，再按本地开发方式安装依赖并构建。
+
+目前仓库还没有已发布的 Release，因此暂时没有可下载的预构建版本。现在可以克隆源码仓库，再按[创建题库](#创建题库)中的步骤构建和使用。
+
 ### 创建题库
 
 在 OpenQuestionBank 仓库根目录运行：
@@ -283,11 +300,9 @@ Schema 检查单个实体的字段结构；重复 ID、引用目标是否存在�
 
 ```sh
 pnpm install
-pnpm typecheck
-pnpm lint
 pnpm test
-pnpm build
+pnpm check
 pnpm format:check
 ```
 
-`pnpm check` 会依次执行类型检查、ESLint、Vitest 和各包构建。模块依赖方向为 `schema → core → cli`；导出器可以依赖 `schema` 和 `core`。数据模型版本策略见 [Schema 版本策略](docs/schema-versioning.md)。
+`pnpm test` 会先构建 workspace 包，再运行 Vitest；`pnpm check` 会执行类型检查、ESLint、构建和测试。CI 会在 Linux、Windows、macOS 上执行这些检查。提交方式、代码约定和版本规则见[贡献指南](CONTRIBUTING.md)；模块依赖方向为 `schema → core → cli`，导出器可以依赖 `schema` 和 `core`。数据模型版本策略见 [Schema 版本策略](docs/schema-versioning.md)。

@@ -1,0 +1,59 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: 构建并发布
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: 设置 pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.25.0
+          run_install: false
+      - name: 设置 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+      - name: 检查代码
+        run: pnpm check
+      - name: 检查格式
+        run: pnpm format:check
+      - name: 生成预构建包与 SHA-256
+        run: pnpm release:package
+      - name: 核对校验值
+        run: cd dist/release && sha256sum --check SHA256SUMS
+      - name: 安装并试用发布包
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          verify_root="$RUNNER_TEMP/openquestionbank-release-check"
+          mkdir -p "$verify_root"
+          tar -xzf "dist/release/openquestionbank-v${version}-prebuilt.tar.gz" -C "$verify_root"
+          cd "$verify_root/openquestionbank-v${version}"
+          pnpm install --prod --frozen-lockfile
+          pnpm oqb --help
+          pnpm oqb init "$verify_root/sample-question-bank"
+          pnpm oqb validate "$verify_root/sample-question-bank"
+      - name: 创建 GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: OpenQuestionBank ${{ github.ref_name }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            dist/release/*-prebuilt.tar.gz
+            dist/release/SHA256SUMS

@@ -31,6 +31,6 @@ JSON Schema 不执行题库内容中的代码。Core 将实体文件限制为 UT
 
 ## 当前交付边界
 
-当前阶段包含 Workspace 配置、工程规范、Schema 1.0、TypeScript 类型、Core 读取与校验 API、CLI 初始化 / 校验 / 统计 / 诊断 / JSON、GitHub Markdown、Obsidian 与 Notion 导出命令和中文使用指南。规则组卷执行和 GitHub Actions 属于后续阶段。
+当前阶段包含 Workspace 配置、工程规范、Schema 1.0、TypeScript 类型、Core 读取与校验 API、CLI 初始化 / 校验 / 统计 / 诊断 / JSON、GitHub Markdown、Obsidian 与 Notion 导出命令、中文使用指南、跨平台 GitHub Actions CI 和按版本标签生成的 GitHub Release 构建包。规则组卷执行仍待后续阶段实现。
 
 JSON、GitHub Markdown、Obsidian Vault 与 Notion 导入包的文件合同、版本、清单和可复现规则分别见 [标准 JSON 导出说明](export-json.md)、[GitHub Markdown 导出说明](export-github-markdown.md)、[Obsidian Vault 导出说明](export-obsidian-vault.md) 和 [Notion 导入说明](export-notion-import.md)。
