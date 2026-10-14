@@ -9,7 +9,7 @@ oqb export ./my-question-bank --format json --out ./dist/my-question-bank
 ```
 
 - `目录` 默认为当前目录。
-- 本文描述 `--format json`。CLI 还支持 `github-markdown`，省略 `--format` 时默认使用 JSON；另一种格式见 [GitHub Markdown 导出说明](export-github-markdown.md)。
+- 本文描述 `--format json`，省略 `--format` 时默认使用 JSON。其他格式分别见 [GitHub Markdown 导出说明](export-github-markdown.md)、[Obsidian Vault 导出说明](export-obsidian-vault.md) 和 [Notion 导入说明](export-notion-import.md)。
 - `--out` 默认为运行命令时当前目录下的 `dist`。
 - `--mode` 沿用 `draft`、`strict`、`release` 校验模式，默认是 `draft`。
 - 校验存在错误或致命错误时，命令返回退出码 `1`，不会生成导出文件。警告不会单独阻止导出。

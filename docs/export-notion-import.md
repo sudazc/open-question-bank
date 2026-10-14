@@ -1,0 +1,90 @@
+# Notion CSV / Markdown 导入包 1.0
+
+`oqb export --format notion` 会先按所选模式校验题库，再生成一组可手动导入 Notion 的 CSV 数据库、Markdown 页面、关系映射和资源文件。导出格式不调用 Notion API，也不需要 Notion 账号或网络连接。
+
+## 使用方法
+
+```sh
+oqb export ./my-question-bank --format notion --out ./dist/my-question-bank-notion
+```
+
+- 题库目录默认为当前目录。
+- `--format notion` 选择 Notion 导入包；省略时使用标准 JSON。
+- `--out` 默认为运行命令时当前目录下的 `dist`。
+- `--mode` 可使用 `draft`、`strict` 或 `release`，默认是 `draft`。`release` 只导出通过发布筛选和最终引用校验的数据。
+- 有错误或致命诊断时命令返回退出码 `1`，不会开始导出；警告不会单独阻止导出。
+- 输出目录不能与题库根目录相同，不能位于题库配置的实体或资源目录内，也不能与题库源文件集合发生路径冲突。
+
+例如，只生成通过发布资格检查的内容：
+
+```sh
+oqb export ./my-question-bank --format notion --mode release --out ./dist/release-notion
+```
+
+## 文件结构
+
+```text
+dist/my-question-bank-notion/
+├── README.md
+├── manifest.json
+├── relations.csv
+├── databases/
+│   ├── bank.csv
+│   ├── topics.csv
+│   ├── knowledge.csv
+│   ├── questions.csv
+│   ├── groups.csv
+│   └── exams.csv
+├── topics/                 # Markdown 分类索引和考点页面
+├── knowledge/              # Markdown 分类索引和知识正文
+├── questions/              # Markdown 分类索引和题目页面
+├── groups/                 # Markdown 分类索引和材料题组页面
+├── exams/                  # Markdown 分类索引和试卷页面
+└── assets/                 # 存在引用资源时生成
+```
+
+每个 CSV 首行是属性名，每一行对应一个稳定 ID 实体。数据行按 ID 排序，关系数组保留原有顺序。CSV 使用 UTF-8、CRLF 行尾和 RFC 4180 转义；逗号、双引号或换行符会按 CSV 规则加引号。
+
+## CSV 数据库字段
+
+| 文件            | 用途                                               | 复杂数据字段                                                                                        |
+| --------------- | -------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `bank.csv`      | 题库名称、版本、语言、许可证和目录配置             | `maintainersJson`、`pathsJson`、`extensionsJson`、`entityJson`                                      |
+| `topics.csv`    | 考点名称、父考点、排序和别名                       | `aliasesJson`、`extensionsJson`、`entityJson`                                                       |
+| `knowledge.csv` | 知识标题、摘要、正文、标签和来源审核信息           | 各 `*IdsJson`、`tagsJson`、`assetsJson`、`sourceJson`、`reviewJson`、`extensionsJson`、`entityJson` |
+| `questions.csv` | 题型、题干、选项、答案、解析、分值、来源和审核信息 | `choicesJson`、`answerJson`、关系 ID、标签、资源、来源审核和 `entityJson`                           |
+| `groups.csv`    | 材料、子题、考点、标签、来源和审核信息             | 关系 ID、标签、资源、来源审核和 `entityJson`                                                        |
+| `exams.csv`     | 试卷类型、固定题目或组卷规则                       | `itemsJson`、`rulesJson`、`extensionsJson`、`entityJson`                                            |
+
+`id` 是 OpenQuestionBank 的稳定实体 ID，不是 Notion 页面 ID。字段名以 `Json` 结尾的值是 JSON 编码文本，适合保留数组和嵌套对象；`entityJson` 保存完整的源实体，便于导入后核对或恢复未单独展开的字段。可将这些复杂字段作为文本属性保留，也可以根据 Notion 的使用方式拆分。
+
+## 手动导入流程
+
+1. 在 Notion 的导入入口选择 CSV，分别导入 `databases/` 中的文件。每个文件会建立一个独立数据库。
+2. 检查属性类型。将 `id` 保留为文本；`order`、`score`、`durationMinutes` 等数字字段可按需要改成数字属性。以 `Json` 结尾的列通常保留为文本。
+3. 需要完整阅读内容时，将 `topics/`、`knowledge/`、`questions/`、`groups/` 和 `exams/` 中的 Markdown 文件导入为页面。页面名包含稳定 ID；Markdown 分类索引可作为目录参考。
+4. 如需 Notion 数据库关系，将 `relations.csv` 导入为普通映射表，再按 `sourceType` + `sourceId` 查找来源记录，按 `targetType` + `targetId` 查找目标记录，并在 Notion 数据库内手动创建 Relation 属性和连接记录。
+5. 如果题库引用图片或文件，请根据 `assetsJson` 检查引用路径，再将对应 `assets/` 文件上传到 Notion 页面。
+
+Notion 原生 Relation 属性必须在 Notion 内配置。`relations.csv` 只提供关系映射和顺序信息，不会自动创建属性、双向关系或连接数据库记录。Markdown 相对链接在导入后也不会自动变成 Notion Relation。
+
+## `relations.csv` 格式
+
+```csv
+sourceType,sourceId,field,targetType,targetId,position
+knowledge,knowledge-water,topicIds,topic,topic-chemistry,0
+question,question-001,knowledgeIds,knowledge,knowledge-water,0
+```
+
+- `sourceType` / `sourceId` 定位源实体；`targetType` / `targetId` 定位目标实体。
+- `field` 是源实体中的字段路径，例如 `topicIds`、`parentId` 或 `items[1].questions[0].questionId`。
+- `position` 是数组中从 0 开始的位置；单值关系为空。试卷嵌套路径中的下标标明所属试卷项和子题位置。
+- 关系表覆盖考点父级、知识的考点 / 前置 / 相关关系、题目的考点 / 知识关系、题组的子题 / 考点关系，以及试卷固定内容和组卷规则中的考点筛选。
+
+Notion 的关系属性可以选择是否显示反向属性，以及使用何种属性名称。具体配置由用户按目标数据库和查询习惯决定。
+
+## 清单与重复导出
+
+`manifest.json` 包含 `openquestionbank-notion-import` 格式标识、格式版本、Schema 版本、题库版本、实体统计，以及每个生成的 CSV、Markdown 页面和资源的 UTF-8 字节数与 SHA-256。清单不包含自身校验值，也不写入生成时间。
+
+题库数据和校验模式不变时，导出文件和清单保持一致。重复导出会更新本次生成的文件及当前引用资源，输出目录中的其他文件会保留；建议使用专用目录，避免和手工文件重名。格式字段或关系行语义变化时，应更新 `formatVersion`、此文档和集成测试。

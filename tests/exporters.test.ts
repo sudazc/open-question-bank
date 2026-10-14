@@ -4,6 +4,7 @@ import type { QuestionBankData } from '../packages/core/src/types.js';
 import {
   createQuestionBankGithubMarkdownExport,
   createQuestionBankJsonExport,
+  createQuestionBankNotionExport,
   createQuestionBankObsidianVaultExport,
 } from '../packages/exporters/src/index.js';
 import { bank, exams, knowledge, questions, questionGroup, topic } from './fixtures.js';
@@ -293,5 +294,98 @@ describe('OpenQuestionBank Obsidian Vault 导出器', () => {
     expect(() => createQuestionBankObsidianVaultExport(broken, assets)).toThrow(
       '导出引用目标不存在或类型不匹配',
     );
+  });
+});
+
+describe('OpenQuestionBank Notion 导入包导出器', () => {
+  it('生成 CSV 数据库、完整 Markdown 页面、稳定 ID 关系映射和发布清单', () => {
+    const exported = createQuestionBankNotionExport(data, assets);
+    const topicsCsv = exported.files.find(({ path }) => path === 'databases/topics.csv')?.contents;
+    const questionsCsv = exported.files.find(
+      ({ path }) => path === 'databases/questions.csv',
+    )?.contents;
+    const relationsCsv = exported.files.find(({ path }) => path === 'relations.csv')?.contents;
+    const knowledgePage = exported.files.find(
+      ({ path }) => path === 'knowledge/id-knowledge-foundations.md',
+    )?.contents;
+
+    expect(topicsCsv).toContain('id,name,parentId,order,description');
+    expect(topicsCsv).toContain('topic-foundations,基础知识,,0');
+    expect(questionsCsv).toContain('id,type,stemMarkdown,explanationMarkdown');
+    expect(questionsCsv).toContain('""choiceIds"":[""choice-a"",""choice-b""]');
+    expect(relationsCsv).toContain(
+      'knowledge,knowledge-foundations,topicIds,topic,topic-foundations,0',
+    );
+    expect(relationsCsv).toContain('exam,exam-fixed,items[1].groupId,group,group-example,1');
+    expect(relationsCsv).toContain(
+      'exam,exam-template,rules[0].filters.topicIds,topic,topic-foundations,0',
+    );
+    expect(knowledgePage).toContain('![三角形示意图](../assets/triangle.svg)');
+    expect(exported.files.find(({ path }) => path === 'README.md')?.contents).toContain(
+      '不会自动创建 Notion 原生 Relation 属性',
+    );
+    expect(exported.manifest).toMatchObject({
+      format: 'openquestionbank-notion-import',
+      formatVersion: '1.0.0',
+      schemaVersion: '1.0.0',
+      bank: { id: bank.id, name: bank.name, version: bank.version },
+      statistics: {
+        entities: { bank: 1, topics: 1, knowledge: 1, questions: 6, groups: 1, exams: 3 },
+        totalEntities: 13,
+      },
+    });
+    expect(exported.manifest.files).toContainEqual({
+      path: 'relations.csv',
+      sizeBytes: Buffer.byteLength(relationsCsv ?? '', 'utf8'),
+      sha256: createHash('sha256')
+        .update(relationsCsv ?? '', 'utf8')
+        .digest('hex'),
+    });
+    expect(exported.manifest.files).toContainEqual({
+      path: 'assets/triangle.svg',
+      sizeBytes: assetContents.byteLength,
+      sha256: assets[0]?.sha256,
+    });
+  });
+
+  it('对实体输入顺序变化保持相同输出', () => {
+    const reordered = createQuestionBankNotionExport(
+      {
+        ...data,
+        topics: [...data.topics].reverse(),
+        knowledge: [...data.knowledge].reverse(),
+        questions: [...data.questions].reverse(),
+        groups: [...data.groups].reverse(),
+        exams: [...data.exams].reverse(),
+      },
+      assets,
+    );
+
+    expect(reordered.files).toEqual(createQuestionBankNotionExport(data, assets).files);
+  });
+
+  it('按 CSV 规则转义逗号、引号和多行正文', () => {
+    const multilineData: QuestionBankData = {
+      ...data,
+      knowledge: [
+        {
+          ...knowledge,
+          body: '第一行, 带逗号\n第二行带有"引号"',
+        },
+      ],
+    };
+    const knowledgeCsv = createQuestionBankNotionExport(multilineData, assets).files.find(
+      ({ path }) => path === 'databases/knowledge.csv',
+    )?.contents;
+
+    expect(knowledgeCsv).toContain('"第一行, 带逗号\r\n第二行带有""引号"""');
+  });
+
+  it('拒绝缺少 Bank 或题库引用资源的数据', () => {
+    const withoutBank: QuestionBankData = { ...data };
+    delete withoutBank.bank;
+
+    expect(() => createQuestionBankNotionExport(withoutBank, assets)).toThrow('有效的 Bank 实体');
+    expect(() => createQuestionBankNotionExport(data, [])).toThrow('缺少题库引用的资源文件');
   });
 });

@@ -27,3 +27,10 @@ export {
   writeQuestionBankObsidianVaultExport,
   type WrittenObsidianVaultExport,
 } from './obsidian-vault-writer.js';
+export {
+  createQuestionBankNotionExport,
+  getQuestionBankNotionFilePaths,
+  type NotionExportManifest,
+  type NotionExportPackage,
+} from './notion.js';
+export { writeQuestionBankNotionExport, type WrittenNotionExport } from './notion-writer.js';

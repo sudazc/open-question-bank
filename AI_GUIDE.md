@@ -89,7 +89,7 @@ https://github.com/sudazc/open-question-bank/blob/main/AI_GUIDE.md
 1. 将题库创建在用户指定的位置；未指定时先询问，或使用工作区中单独的题库目录，不要覆盖现有文件。
 2. 生成题库后，从 OpenQuestionBank 仓库根目录运行 `pnpm oqb validate <题库目录> --mode draft`。
 3. 修复 Schema、ID、关系和资源错误，再运行 `pnpm oqb stats <题库目录>` 汇报实际数量。
-4. 只有用户需要预览包时，才运行 `pnpm oqb export <题库目录> --format <格式> --out <输出目录>`；`<格式>` 可选 `json`、`github-markdown` 或 `obsidian`。
+4. 只有用户需要预览或导入包时，才运行 `pnpm oqb export <题库目录> --format <格式> --out <输出目录>`；`<格式>` 可选 `json`、`github-markdown`、`obsidian` 或 `notion`。Notion 格式会生成 CSV 数据库和关系映射；Notion 原生 Relation 需要用户在 Notion 内手动创建。
 5. 如果当前环境没有 CLI 或文件系统访问能力，提供完整目录树和文件内容，并附上用户可执行的校验命令。不要声称未运行的校验已经通过。
 
 生成完成后说明：题库保存位置、主题和题目数量、采用的题型 / 难度、资料来源、验证结果，以及仍需用户确认的内容和授权信息。

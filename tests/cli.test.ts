@@ -216,6 +216,46 @@ describe('OpenQuestionBank CLI', () => {
     expect(stdout.join('\n')).toContain('Obsidian Vault 导出完成');
   });
 
+  it('校验后生成 Notion CSV / Markdown 导入包和可复现清单', async () => {
+    const bankDir = join(rootDir, 'bank');
+    const exportDir = join(rootDir, 'dist', 'notion');
+    await runCli(['init', bankDir], output);
+
+    const firstExitCode = await runCli(
+      ['export', bankDir, '--format', 'notion', '--out', exportDir],
+      output,
+    );
+    expect(firstExitCode, stderr.join('\n')).toBe(0);
+    const readme = await readFile(join(exportDir, 'README.md'), 'utf8');
+    const questionsCsv = await readFile(join(exportDir, 'databases', 'questions.csv'), 'utf8');
+    const relationsCsv = await readFile(join(exportDir, 'relations.csv'), 'utf8');
+    const questionPage = await readFile(
+      join(exportDir, 'questions', 'id-question-example.md'),
+      'utf8',
+    );
+    const firstManifest = await readFile(join(exportDir, 'manifest.json'), 'utf8');
+    const secondExitCode = await runCli(
+      ['export', bankDir, '--format', 'notion', '--out', exportDir],
+      output,
+    );
+
+    expect(firstExitCode).toBe(0);
+    expect(secondExitCode).toBe(0);
+    expect(readme).toContain('分别导入 `databases/` 内的六个 CSV');
+    expect(readme).toContain('不会自动创建 Notion 原生 Relation');
+    expect(questionsCsv).toContain('question-example');
+    expect(relationsCsv).toContain('question,question-example,topicIds,topic,topic-foundations,0');
+    expect(questionPage).toContain('OpenQuestionBank 的源数据主要使用什么方式维护？');
+    expect(JSON.parse(firstManifest)).toMatchObject({
+      format: 'openquestionbank-notion-import',
+      formatVersion: '1.0.0',
+      bank: { id: 'my-question-bank', version: '0.1.0' },
+      statistics: { totalEntities: 4 },
+    });
+    expect(await readFile(join(exportDir, 'manifest.json'), 'utf8')).toBe(firstManifest);
+    expect(stdout.join('\n')).toContain('Notion 导入包导出完成');
+  });
+
   it('校验失败时不生成导出文件', async () => {
     const bankDir = join(rootDir, 'bank');
     const exportDir = join(rootDir, 'dist');
@@ -265,6 +305,7 @@ describe('OpenQuestionBank CLI', () => {
     expect(stdout.join('\n')).toContain('oqb validate');
     expect(stdout.join('\n')).toContain('github-markdown');
     expect(stdout.join('\n')).toContain('obsidian');
+    expect(stdout.join('\n')).toContain('notion');
 
     const exitCode = await runCli(['validate', rootDir, '--mode', 'invalid'], output);
 
