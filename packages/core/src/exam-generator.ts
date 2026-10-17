@@ -3,18 +3,44 @@ import type {
   ExamItem,
   GeneratedExamResult,
   GeneratedExamTemplate,
+  SelectionRule,
 } from '@openquestionbank/schema';
 import { getExamRuleCandidates, type ExamRuleCandidate } from './exam-rules.js';
 import type { QuestionBankData } from './types.js';
 
-export const examGenerationAlgorithmVersion = '1.0.0' as const;
+export const examGenerationAlgorithmVersion = '1.2.0' as const;
+
+const maximumExamSearchCombinations = 100_000;
+
+interface PlannedRule {
+  rule: SelectionRule;
+  ruleIndex: number;
+  candidates: ExamRuleCandidate[];
+}
+
+interface RuleSearchFrame {
+  position: number;
+  rule: SelectionRule;
+  ruleIndex: number;
+  candidates: ExamRuleCandidate[];
+  combinationIndices: number[];
+  selected: ExamRuleCandidate[] | undefined;
+}
+
+interface RuleSearchFailure {
+  position: number;
+  ruleIndex: number;
+  requiredCount: number;
+  availableCount: number;
+}
 
 export type ExamGenerationErrorCode =
   | 'BANK_REQUIRED'
   | 'TEMPLATE_NOT_FOUND'
   | 'EXAM_NOT_TEMPLATE'
   | 'INVALID_RANDOM_SEED'
-  | 'INSUFFICIENT_CANDIDATES';
+  | 'INSUFFICIENT_CANDIDATES'
+  | 'SEARCH_LIMIT_REACHED';
 
 export class ExamGenerationError extends Error {
   constructor(
@@ -53,48 +79,160 @@ export function generateExam(
   const randomIndex = createRandomIndex(randomSeed);
   const selectedQuestionIds = new Set<string>();
   const selectedGroupIds = new Set<string>();
-  const items: ExamItem[] = [];
+  const itemsByRule: ExamItem[][] = exam.rules.map(() => []);
+  const plannedRules: PlannedRule[] = exam.rules
+    .map((rule, ruleIndex) => ({
+      rule,
+      ruleIndex,
+      candidates: shuffle(
+        getExamRuleCandidates(rule, data.questions, data.groups).sort(compareCandidateIds),
+        randomIndex,
+      ),
+    }))
+    .sort(
+      (left, right) =>
+        left.candidates.length - left.rule.count - (right.candidates.length - right.rule.count) ||
+        left.ruleIndex - right.ruleIndex,
+    );
 
-  exam.rules.forEach((rule, ruleIndex) => {
-    const candidates = getExamRuleCandidates(rule, data.questions, data.groups)
-      .filter((candidate) => isCandidateAvailable(candidate, selectedQuestionIds, selectedGroupIds))
-      .sort(compareCandidateIds);
-    if (candidates.length < rule.count) {
+  let bestFailure: RuleSearchFailure | undefined;
+  const recordFailure = (failure: RuleSearchFailure): void => {
+    if (
+      bestFailure === undefined ||
+      failure.position > bestFailure.position ||
+      (failure.position === bestFailure.position &&
+        failure.availableCount < bestFailure.availableCount)
+    ) {
+      bestFailure = failure;
+    }
+  };
+  const createSearchFrame = (position: number): RuleSearchFrame | undefined => {
+    const plannedRule = plannedRules[position];
+    if (!plannedRule) {
+      return undefined;
+    }
+
+    const candidates = plannedRule.candidates.filter((candidate) =>
+      isCandidateAvailable(candidate, selectedQuestionIds, selectedGroupIds),
+    );
+    if (candidates.length < plannedRule.rule.count) {
+      recordFailure({
+        position,
+        ruleIndex: plannedRule.ruleIndex,
+        requiredCount: plannedRule.rule.count,
+        availableCount: candidates.length,
+      });
+      return undefined;
+    }
+
+    return {
+      position,
+      rule: plannedRule.rule,
+      ruleIndex: plannedRule.ruleIndex,
+      candidates,
+      combinationIndices: Array.from({ length: plannedRule.rule.count }, (_, index) => index),
+      selected: undefined,
+    };
+  };
+
+  const searchFrames: RuleSearchFrame[] = [];
+  let searchAttempts = 0;
+  let solved = plannedRules.length === 0;
+  if (!solved) {
+    const firstFrame = createSearchFrame(0);
+    if (firstFrame) {
+      searchFrames.push(firstFrame);
+    }
+  }
+
+  while (searchFrames.length > 0) {
+    const frame = searchFrames.at(-1);
+    if (!frame) {
+      break;
+    }
+
+    if (frame.selected) {
+      for (const candidate of frame.selected) {
+        unselectCandidate(candidate, selectedQuestionIds, selectedGroupIds);
+      }
+      itemsByRule[frame.ruleIndex] = [];
+      frame.selected = undefined;
+      if (!advanceCombination(frame.combinationIndices, frame.candidates.length)) {
+        searchFrames.pop();
+        continue;
+      }
+    }
+
+    searchAttempts += 1;
+    if (searchAttempts > maximumExamSearchCombinations) {
       throw new ExamGenerationError(
-        'INSUFFICIENT_CANDIDATES',
-        `组卷规则 ${ruleIndex + 1} 候选不足：需要 ${rule.count} 个，排除重复题目后仅有 ${candidates.length} 个`,
-        ruleIndex,
-        rule.count,
-        candidates.length,
+        'SEARCH_LIMIT_REACHED',
+        `组卷搜索超过 ${maximumExamSearchCombinations} 个候选组合，未能确认规则组合是否可行；请缩小规则范围或拆分试卷模板`,
       );
     }
 
-    for (const candidate of shuffle(candidates, randomIndex).slice(0, rule.count)) {
-      if (candidate.unit === 'question') {
-        selectedQuestionIds.add(candidate.question.id);
-        items.push({
-          kind: 'question',
-          questionId: candidate.question.id,
-          score: rule.scorePerQuestion,
-        });
-        continue;
+    const selection: ExamRuleCandidate[] = [];
+    for (const index of frame.combinationIndices) {
+      const candidate = frame.candidates[index];
+      if (!candidate) {
+        throw new Error(`无法读取组卷候选：${index}`);
       }
-
-      selectedGroupIds.add(candidate.group.id);
-      const groupItems = candidate.questions.map(({ id }) => {
-        selectedQuestionIds.add(id);
-        return { kind: 'question' as const, questionId: id, score: rule.scorePerQuestion };
-      });
-      items.push({ kind: 'group', groupId: candidate.group.id, questions: groupItems });
+      selection.push(candidate);
     }
-  });
+
+    if (!canSelectCandidates(selection, selectedQuestionIds, selectedGroupIds)) {
+      recordFailure({
+        position: frame.position,
+        ruleIndex: frame.ruleIndex,
+        requiredCount: frame.rule.count,
+        availableCount: Math.max(0, frame.candidates.length - 1),
+      });
+      if (!advanceCombination(frame.combinationIndices, frame.candidates.length)) {
+        searchFrames.pop();
+      }
+      continue;
+    }
+
+    for (const candidate of selection) {
+      selectCandidate(candidate, selectedQuestionIds, selectedGroupIds);
+    }
+    frame.selected = selection;
+    itemsByRule[frame.ruleIndex] = selection.map((candidate) =>
+      createExamItem(candidate, frame.rule),
+    );
+
+    if (frame.position + 1 === plannedRules.length) {
+      solved = true;
+      break;
+    }
+
+    const nextFrame = createSearchFrame(frame.position + 1);
+    if (nextFrame) {
+      searchFrames.push(nextFrame);
+    }
+  }
+
+  if (!solved) {
+    const failure = bestFailure ?? {
+      ruleIndex: 0,
+      requiredCount: 0,
+      availableCount: 0,
+    };
+    throw new ExamGenerationError(
+      'INSUFFICIENT_CANDIDATES',
+      `组卷规则 ${failure.ruleIndex + 1} 候选不足：需要 ${failure.requiredCount} 个，排除重复题目后仅有 ${failure.availableCount} 个`,
+      failure.ruleIndex,
+      failure.requiredCount,
+      failure.availableCount,
+    );
+  }
 
   const result: GeneratedExamResult = {
     id: exam.id,
     title: exam.title,
     mode: 'generated',
     kind: 'result',
-    items,
+    items: itemsByRule.flat(),
     randomSeed,
     bankVersion: data.bank.version,
     algorithmVersion: examGenerationAlgorithmVersion,
@@ -123,6 +261,114 @@ function isCandidateAvailable(
     !selectedGroupIds.has(candidate.group.id) &&
     candidate.questions.every(({ id }) => !selectedQuestionIds.has(id))
   );
+}
+
+function canSelectCandidates(
+  candidates: readonly ExamRuleCandidate[],
+  selectedQuestionIds: ReadonlySet<string>,
+  selectedGroupIds: ReadonlySet<string>,
+): boolean {
+  const candidateQuestionIds = new Set<string>();
+  const candidateGroupIds = new Set<string>();
+  for (const candidate of candidates) {
+    if (candidate.unit === 'question') {
+      if (
+        selectedQuestionIds.has(candidate.question.id) ||
+        candidateQuestionIds.has(candidate.question.id)
+      ) {
+        return false;
+      }
+      candidateQuestionIds.add(candidate.question.id);
+      continue;
+    }
+
+    if (
+      selectedGroupIds.has(candidate.group.id) ||
+      candidateGroupIds.has(candidate.group.id) ||
+      candidate.questions.some(
+        ({ id }) => selectedQuestionIds.has(id) || candidateQuestionIds.has(id),
+      )
+    ) {
+      return false;
+    }
+    candidateGroupIds.add(candidate.group.id);
+    for (const { id } of candidate.questions) {
+      candidateQuestionIds.add(id);
+    }
+  }
+  return true;
+}
+
+function selectCandidate(
+  candidate: ExamRuleCandidate,
+  selectedQuestionIds: Set<string>,
+  selectedGroupIds: Set<string>,
+): void {
+  if (candidate.unit === 'question') {
+    selectedQuestionIds.add(candidate.question.id);
+    return;
+  }
+
+  selectedGroupIds.add(candidate.group.id);
+  for (const { id } of candidate.questions) {
+    selectedQuestionIds.add(id);
+  }
+}
+
+function unselectCandidate(
+  candidate: ExamRuleCandidate,
+  selectedQuestionIds: Set<string>,
+  selectedGroupIds: Set<string>,
+): void {
+  if (candidate.unit === 'question') {
+    selectedQuestionIds.delete(candidate.question.id);
+    return;
+  }
+
+  selectedGroupIds.delete(candidate.group.id);
+  for (const { id } of candidate.questions) {
+    selectedQuestionIds.delete(id);
+  }
+}
+
+function createExamItem(candidate: ExamRuleCandidate, rule: SelectionRule): ExamItem {
+  if (candidate.unit === 'question') {
+    return {
+      kind: 'question',
+      questionId: candidate.question.id,
+      score: rule.scorePerQuestion,
+    };
+  }
+
+  return {
+    kind: 'group',
+    groupId: candidate.group.id,
+    questions: candidate.questions.map(({ id }) => ({
+      kind: 'question',
+      questionId: id,
+      score: rule.scorePerQuestion,
+    })),
+  };
+}
+
+function advanceCombination(indices: number[], candidateCount: number): boolean {
+  for (let index = indices.length - 1; index >= 0; index -= 1) {
+    const currentIndex = indices[index];
+    const maximumIndex = candidateCount - indices.length + index;
+    if (currentIndex === undefined || currentIndex >= maximumIndex) {
+      continue;
+    }
+    indices[index] = currentIndex + 1;
+    for (let nextIndex = index + 1; nextIndex < indices.length; nextIndex += 1) {
+      const previousIndex = indices[nextIndex - 1];
+      if (previousIndex === undefined) {
+        throw new Error(`无法继续枚举组卷候选组合：${nextIndex}`);
+      }
+      indices[nextIndex] = previousIndex + 1;
+    }
+    return true;
+  }
+  return false;
 }
 
 function compareCandidateIds(left: ExamRuleCandidate, right: ExamRuleCandidate): number {

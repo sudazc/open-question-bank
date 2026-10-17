@@ -11,6 +11,21 @@ import type { LocatedEntity, LocatedQuestionBank } from './types.js';
 
 export type ValidationMode = 'draft' | 'strict' | 'release';
 
+const unresolvedAuthorizationValues = new Set([
+  'tbd',
+  'tbd not for publication',
+  'todo',
+  'to be determined',
+  'unknown',
+  'n a',
+  '待确认',
+  '待定',
+  '未确认',
+  '未授权',
+  '不得发布',
+  '暂不发布',
+]);
+
 interface PublicationIssue {
   code: string;
   message: string;
@@ -30,6 +45,17 @@ export function applyPublicationPolicy(
 
   const severity: DiagnosticSeverity = mode === 'strict' ? 'error' : 'warning';
   const bankLicense = bank.bank?.value.license;
+  if (!hasDeclaredAuthorizationValue(bankLicense)) {
+    diagnostics.push({
+      code: 'OQB-LICENSE-004',
+      severity: 'error',
+      message: 'Bank.license 不能留空或使用待确认占位值',
+      file: bank.bank?.file ?? 'bank.yaml',
+      ...(bank.bank === undefined ? {} : { entityId: bank.bank.value.id }),
+      fieldPath: 'license',
+      suggestion: '确认题库的实际发布许可证；尚未确认时保留 draft 模式',
+    });
+  }
   const eligibleKnowledge = collectEligible(bank.knowledge, bankLicense, severity, diagnostics);
   const eligibleQuestions = collectEligible(bank.questions, bankLicense, severity, diagnostics);
   const eligibleGroups = collectEligible(bank.groups, bankLicense, severity, diagnostics);
@@ -88,11 +114,11 @@ function getPublicationIssues(
       suggestion: '完成内容审核后再将审核状态设为 approved',
     });
   }
-  if (!bankLicense?.trim()) {
+  if (!hasDeclaredAuthorizationValue(bankLicense)) {
     issues.push({
       code: 'OQB-LICENSE-004',
       message: 'Bank.license 未明确声明题库发布许可证',
-      fieldPath: 'source',
+      fieldPath: 'bank.license',
       suggestion: '在 bank.yaml 中声明题库发布许可证',
     });
   }
@@ -105,7 +131,7 @@ function getPublicationIssues(
       suggestion: '确认内容权利来源，并更新 source.type 与授权信息',
     });
   } else if (value.source.type !== 'original') {
-    if (!value.source.license?.trim()) {
+    if (!hasDeclaredAuthorizationValue(value.source.license)) {
       issues.push({
         code: 'OQB-LICENSE-002',
         message: '非原创来源必须明确声明来源许可证或授权依据',
@@ -113,7 +139,7 @@ function getPublicationIssues(
         suggestion: '填写来源许可证或明确的授权依据，不要仅凭资料公开认定可转载',
       });
     }
-    if (!value.source.attribution?.trim()) {
+    if (!hasDeclaredAuthorizationValue(value.source.attribution)) {
       issues.push({
         code: 'OQB-LICENSE-003',
         message: '非原创来源缺少发布所需的署名信息',
@@ -123,6 +149,18 @@ function getPublicationIssues(
     }
   }
   return issues;
+}
+
+function hasDeclaredAuthorizationValue(value: string | undefined): boolean {
+  if (!value?.trim()) {
+    return false;
+  }
+  const normalized = value
+    .normalize('NFKC')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_.,:;：；/\\-]+/g, ' ');
+  return !unresolvedAuthorizationValues.has(normalized);
 }
 
 function filterReleaseContent(
@@ -136,6 +174,7 @@ function filterReleaseContent(
   const allQuestionIds = entityIds(bank.questions);
   const allGroupIds = entityIds(bank.groups);
   const eligibleExams = new Set(bank.exams);
+  pruneUnavailableKnowledge(eligibleKnowledge, allKnowledgeIds, diagnostics);
   let changed: boolean;
 
   do {
@@ -238,6 +277,64 @@ function filterReleaseContent(
   };
 }
 
+function pruneUnavailableKnowledge(
+  eligibleKnowledge: Set<LocatedEntity<Knowledge>>,
+  allKnowledgeIds: ReadonlySet<string>,
+  diagnostics: Diagnostic[],
+): void {
+  const retainedKnowledgeIds = entityIds([...eligibleKnowledge]);
+  const retainedCounts = countEntityIds([...eligibleKnowledge]);
+  const dependentsByKnowledgeId = new Map<string, LocatedEntity<Knowledge>[]>();
+
+  for (const entity of eligibleKnowledge) {
+    for (const dependencyId of [...entity.value.prerequisiteIds, ...entity.value.relatedIds]) {
+      if (!allKnowledgeIds.has(dependencyId)) {
+        continue;
+      }
+      const dependents = dependentsByKnowledgeId.get(dependencyId);
+      if (dependents) {
+        dependents.push(entity);
+      } else {
+        dependentsByKnowledgeId.set(dependencyId, [entity]);
+      }
+    }
+  }
+
+  const pendingIds = [...allKnowledgeIds].filter((id) => !retainedKnowledgeIds.has(id));
+  for (let index = 0; index < pendingIds.length; index += 1) {
+    const unavailableId = pendingIds[index];
+    if (unavailableId === undefined) {
+      continue;
+    }
+    for (const dependent of dependentsByKnowledgeId.get(unavailableId) ?? []) {
+      if (!eligibleKnowledge.delete(dependent)) {
+        continue;
+      }
+      const dependentId = dependent.value.id;
+      const remainingCount = (retainedCounts.get(dependentId) ?? 1) - 1;
+      retainedCounts.set(dependentId, remainingCount);
+      if (remainingCount === 0) {
+        retainedCounts.delete(dependentId);
+        retainedKnowledgeIds.delete(dependentId);
+        pendingIds.push(dependentId);
+      }
+      const firstUnavailableId = firstUnavailableReference(
+        [...dependent.value.prerequisiteIds, ...dependent.value.relatedIds],
+        allKnowledgeIds,
+        retainedKnowledgeIds,
+      );
+      addDependencyDiagnostic(
+        diagnostics,
+        dependent,
+        'OQB-REF-010',
+        'prerequisiteIds / relatedIds',
+        '知识',
+        firstUnavailableId ?? unavailableId,
+      );
+    }
+  }
+}
+
 function firstUnavailableReference(
   references: readonly string[],
   allIds: ReadonlySet<string>,
@@ -307,4 +404,14 @@ function addDependencyDiagnostic<T extends { id: string }>(
 
 function entityIds<T extends { id: string }>(entities: readonly LocatedEntity<T>[]): Set<string> {
   return new Set(entities.map(({ value }) => value.id));
+}
+
+function countEntityIds<T extends { id: string }>(
+  entities: readonly LocatedEntity<T>[],
+): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const { value } of entities) {
+    counts.set(value.id, (counts.get(value.id) ?? 0) + 1);
+  }
+  return counts;
 }

@@ -63,7 +63,7 @@ if (!validated.valid) {
 const exam = generateExam(validated.data, 'exam-template', 'practice-001');
 ```
 
-算法版本 `1.0.0` 使用模板规则顺序、稳定 ID 排序、SHA-256 种子流和 Fisher–Yates 洗牌。固定同一题库数据、模板和随机种子时，结果题目与顺序保持一致。跨规则抽到同一题目或题组子题时，后续规则从未选择的候选中继续抽取；候选不足会抛出 `ExamGenerationError`，其中包含错误代码、规则位置、所需数量和剩余数量。
+算法版本 `1.2.0` 按候选余量（候选数减需求数）从小到大处理规则，余量相同时按模板顺序处理；每条规则的候选按稳定 ID 排序后使用 SHA-256 种子流和 Fisher–Yates 洗牌。若一组选择导致后续规则候选不足，算法会回溯并尝试其他候选组合。最多检查 100,000 个候选组合；超过上限时抛出 `SEARCH_LIMIT_REACHED`，表示尚未确认规则组合是否可行。只有完成搜索后仍无可行组合时，才抛出 `INSUFFICIENT_CANDIDATES`，错误包含规则位置、所需数量和剩余数量。最终试卷仍按模板规则顺序输出；固定同一题库数据、模板和随机种子时，结果题目与顺序保持一致。
 
 ## 文件安全限制
 
@@ -83,7 +83,7 @@ Markdown 允许常用安全标签 `br`、`hr`、`sub`、`sup`、`kbd`、`mark`�
 - `strict` 保留全部结构有效实体；每个内容实体都必须为 `review.status: approved`，且满足下述授权信息要求，否则产生阻止校验通过的错误
 - `release` 仅保留审核通过且满足授权信息要求的 `Knowledge`、`Question` 和 `QuestionGroup`；被筛除内容会产生 warning。依赖被筛除知识、题目或题组的实体及固定试卷 / 已生成试卷结果也会一并筛除，之后才校验最终引用图并构建 `data` 和 `index`
 
-授权字段按保守规则检查：`original` 来源依赖 `Bank.license`；`official_public`、`licensed` 和 `adapted` 来源必须填写 `source.license` 与 `source.attribution`；`unknown` 来源不能进入 release。许可证字符串不按 SPDX 解析，也不会推断许可证兼容性或法律效力。公开可访问的官方资料不会自动获得发布资格。
+授权字段按保守规则检查：`original` 来源依赖 `Bank.license`；`official_public`、`licensed` 和 `adapted` 来源必须填写有效的 `source.license` 与 `source.attribution`；`unknown` 来源不能进入 release。strict / release 会拒绝空值和常见待确认占位值，例如 `TBD`、`unknown` 和 `TBD - not for publication`。许可证字符串不按 SPDX 解析，也不会推断许可证兼容性或法律效力。公开可访问的官方资料不会自动获得发布资格。
 
 `Topic` 与 `Exam` 没有审核或来源字段，因此不单独检查审核授权；模板试卷会在筛选后按剩余候选重新执行数量校验。Markdown 中指向被筛除内容的 `oqb://` 链接会在最终引用校验中产生错误，调用方应检查 `valid` 后再使用 release 数据。
 

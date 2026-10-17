@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -328,6 +328,20 @@ describe('OpenQuestionBank CLI', () => {
     expect(exitCode).toBe(2);
     expect(await readFile(assetMarker, 'utf8')).toBe(originalAsset);
     expect(stderr.join('\n')).toContain('题库源数据目录');
+  });
+
+  it('在创建路径前拒绝经目录符号链接进入题库源目录', async () => {
+    const bankDir = join(rootDir, 'bank');
+    const bankAlias = join(rootDir, 'bank-alias');
+    const redirectedOutput = join(bankAlias, 'questions', 'exported');
+    await runCli(['init', bankDir], output);
+    await symlink(bankDir, bankAlias, 'junction');
+
+    const exitCode = await runCli(['export', bankDir, '--out', redirectedOutput], output);
+
+    expect(exitCode).toBe(2);
+    expect(stderr.join('\n')).toContain('题库源数据目录');
+    await expect(lstat(redirectedOutput)).rejects.toHaveProperty('code', 'ENOENT');
   });
 
   it('拒绝把 GitHub Markdown 导出写回题库根目录', async () => {

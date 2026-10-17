@@ -6,6 +6,7 @@ import type {
   QuestionGroup,
   Topic,
 } from '@openquestionbank/schema';
+import { maskMarkdownCode } from './asset-validator.js';
 import type { Diagnostic } from './diagnostics.js';
 import { getExamRuleCandidates } from './exam-rules.js';
 import type { LocatedEntity, LocatedQuestionBank } from './types.js';
@@ -568,7 +569,7 @@ function checkMarkdownValue(
 ): void {
   const pattern =
     /\boqb:\/\/(topic|knowledge|question|exam)\/([A-Za-z0-9][A-Za-z0-9._:-]{0,127})(?![A-Za-z0-9._:-])/g;
-  for (const match of text.matchAll(pattern)) {
+  for (const match of maskMarkdownCode(text).matchAll(pattern)) {
     const kind = match[1] as MarkdownTargetKind | undefined;
     const id = match[2];
     if (!kind || !id || targets[kind].has(id)) {
@@ -591,37 +592,22 @@ function detectTopicCycles(
   topicMap: EntityMap<Topic>,
   diagnostics: Diagnostic[],
 ): void {
-  const state = new Map<string, 'visiting' | 'visited'>();
-  function visit(topic: LocatedEntity<Topic>, trail: string[]): void {
-    state.set(topic.value.id, 'visiting');
-    const parentId = topic.value.parentId;
-    if (parentId && topicMap.has(parentId)) {
-      if (state.get(parentId) === 'visiting') {
-        const cycleStart = trail.indexOf(parentId);
-        const cycle = [...trail.slice(Math.max(cycleStart, 0)), topic.value.id, parentId];
-        addDiagnostic(
-          diagnostics,
-          topic.file,
-          topic.value.id,
-          'OQB-TOPIC-001',
-          `考点父级形成循环：${cycle.join(' → ')}`,
-          'parentId',
-          '调整 parentId，使每个考点最多沿父级回溯到根节点',
-        );
-      } else if (state.get(parentId) !== 'visited') {
-        const parent = topicMap.get(parentId);
-        if (parent) {
-          visit(parent, [...trail, topic.value.id]);
-        }
-      }
-    }
-    state.set(topic.value.id, 'visited');
-  }
-  for (const topic of topics) {
-    if (!state.has(topic.value.id)) {
-      visit(topic, []);
-    }
-  }
+  detectCycles(
+    topics,
+    topicMap,
+    ({ parentId }) => (parentId ? [parentId] : []),
+    (topic, cycle) => {
+      addDiagnostic(
+        diagnostics,
+        topic.file,
+        topic.value.id,
+        'OQB-TOPIC-001',
+        `考点父级形成循环：${cycle.join(' → ')}`,
+        'parentId',
+        '调整 parentId，使每个考点最多沿父级回溯到根节点',
+      );
+    },
+  );
 }
 
 function detectKnowledgePrerequisiteCycles(
@@ -629,37 +615,90 @@ function detectKnowledgePrerequisiteCycles(
   noteMap: EntityMap<Knowledge>,
   diagnostics: Diagnostic[],
 ): void {
+  detectCycles(
+    notes,
+    noteMap,
+    ({ prerequisiteIds }) => prerequisiteIds,
+    (note, cycle) => {
+      addDiagnostic(
+        diagnostics,
+        note.file,
+        note.value.id,
+        'OQB-KNOWLEDGE-001',
+        `知识前置依赖形成循环：${cycle.join(' → ')}`,
+        'prerequisiteIds',
+        '调整 prerequisiteIds，使前置知识关系构成有向无环图',
+      );
+    },
+  );
+}
+
+interface CycleFrame<T> {
+  entity: LocatedEntity<T>;
+  dependencies: readonly string[];
+  nextIndex: number;
+}
+
+function detectCycles<T extends { id: string }>(
+  entities: readonly LocatedEntity<T>[],
+  entityMap: EntityMap<T>,
+  getDependencies: (value: T) => readonly string[],
+  reportCycle: (entity: LocatedEntity<T>, cycle: readonly string[]) => void,
+): void {
   const state = new Map<string, 'visiting' | 'visited'>();
-  function visit(note: LocatedEntity<Knowledge>, trail: string[]): void {
-    state.set(note.value.id, 'visiting');
-    for (const prerequisiteId of note.value.prerequisiteIds) {
-      if (!noteMap.has(prerequisiteId)) {
+  const activePath: string[] = [];
+  const activePathIndexes = new Map<string, number>();
+
+  for (const entity of entities) {
+    if (state.has(entity.value.id)) {
+      continue;
+    }
+
+    state.set(entity.value.id, 'visiting');
+    activePathIndexes.set(entity.value.id, activePath.length);
+    activePath.push(entity.value.id);
+    const stack: CycleFrame<T>[] = [
+      { entity, dependencies: getDependencies(entity.value), nextIndex: 0 },
+    ];
+
+    while (stack.length > 0) {
+      const frame = stack[stack.length - 1];
+      if (!frame) {
+        break;
+      }
+      const dependencyId = frame.dependencies[frame.nextIndex];
+      if (dependencyId === undefined) {
+        state.set(frame.entity.value.id, 'visited');
+        activePathIndexes.delete(frame.entity.value.id);
+        activePath.pop();
+        stack.pop();
         continue;
       }
-      if (state.get(prerequisiteId) === 'visiting') {
-        const cycleStart = trail.indexOf(prerequisiteId);
-        const cycle = [...trail.slice(Math.max(cycleStart, 0)), note.value.id, prerequisiteId];
-        addDiagnostic(
-          diagnostics,
-          note.file,
-          note.value.id,
-          'OQB-KNOWLEDGE-001',
-          `知识前置依赖形成循环：${cycle.join(' → ')}`,
-          'prerequisiteIds',
-          '调整 prerequisiteIds，使前置知识关系构成有向无环图',
-        );
-      } else if (state.get(prerequisiteId) !== 'visited') {
-        const prerequisite = noteMap.get(prerequisiteId);
-        if (prerequisite) {
-          visit(prerequisite, [...trail, note.value.id]);
-        }
+      frame.nextIndex += 1;
+
+      const dependency = entityMap.get(dependencyId);
+      if (!dependency) {
+        continue;
       }
-    }
-    state.set(note.value.id, 'visited');
-  }
-  for (const note of notes) {
-    if (!state.has(note.value.id)) {
-      visit(note, []);
+      if (state.get(dependencyId) === 'visiting') {
+        const cycleStart = activePathIndexes.get(dependencyId);
+        if (cycleStart !== undefined) {
+          reportCycle(frame.entity, [...activePath.slice(cycleStart), dependencyId]);
+        }
+        continue;
+      }
+      if (state.get(dependencyId) === 'visited') {
+        continue;
+      }
+
+      state.set(dependencyId, 'visiting');
+      activePathIndexes.set(dependencyId, activePath.length);
+      activePath.push(dependencyId);
+      stack.push({
+        entity: dependency,
+        dependencies: getDependencies(dependency.value),
+        nextIndex: 0,
+      });
     }
   }
 }

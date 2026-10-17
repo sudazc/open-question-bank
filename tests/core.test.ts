@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -6,6 +6,7 @@ import {
   generateExam,
   parseMarkdownDocument,
   parseYamlDocument,
+  validateQuestionBank,
   validateQuestionBankDirectory,
 } from '../packages/core/src/index.js';
 
@@ -146,6 +147,106 @@ describe('OpenQuestionBank Core', () => {
     expect(result.diagnostics.every(({ severity }) => severity === 'warning')).toBe(true);
   });
 
+  it('release 模式拒绝题库许可证待确认占位值', async () => {
+    const bankPath = join(rootDir, 'bank.yaml');
+    const bank = await readFile(bankPath, 'utf8');
+    await writeFile(
+      bankPath,
+      bank.replace('license: CC-BY-4.0', 'license: TBD - not for publication'),
+    );
+
+    const result = await validateQuestionBankDirectory(rootDir, { mode: 'release' });
+
+    expect(result.valid).toBe(false);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'OQB-LICENSE-004',
+        severity: 'error',
+        file: 'bank.yaml',
+        fieldPath: 'license',
+      }),
+    );
+  });
+
+  it('release 过滤通过单次依赖遍历传递移除长知识链', () => {
+    const count = 1_000;
+    const bank = {
+      file: 'bank.yaml',
+      value: {
+        schemaVersion: '1.0.0',
+        id: 'sample-bank',
+        name: '通用示例题库',
+        version: '1.0.0',
+        language: 'zh-CN',
+        license: 'CC-BY-4.0',
+        maintainers: [{ name: 'OpenQuestionBank' }],
+        paths: {
+          topics: 'topics',
+          knowledge: 'knowledge',
+          questions: 'questions',
+          groups: 'groups',
+          exams: 'exams',
+          assets: 'assets',
+        },
+      },
+    };
+    const knowledge = Array.from({ length: count }, (_, index) => ({
+      file: `knowledge/${index}.md`,
+      value: {
+        id: `knowledge-${index}`,
+        title: `知识 ${index}`,
+        body: '知识内容',
+        topicIds: [],
+        prerequisiteIds: index === 0 ? [] : [`knowledge-${index - 1}`],
+        relatedIds: [],
+        tags: [],
+        source: { type: 'original' as const },
+        review: { status: index === 0 ? ('draft' as const) : ('approved' as const) },
+      },
+    }));
+
+    const result = validateQuestionBank(
+      {
+        rootDir,
+        bank,
+        topics: [],
+        knowledge,
+        questions: [],
+        groups: [],
+        exams: [],
+        diagnostics: [],
+      },
+      { mode: 'release' },
+    );
+
+    expect(result.valid).toBe(true);
+    expect(result.data.knowledge).toHaveLength(0);
+    expect(result.diagnostics.filter(({ code }) => code === 'OQB-REF-010')).toHaveLength(count - 1);
+  });
+
+  it('不把 Markdown 代码中的 oqb URI 当作实际实体引用', async () => {
+    const notePath = join(rootDir, 'knowledge/one.md');
+    const note = await readFile(notePath, 'utf8');
+    await writeFile(
+      notePath,
+      note.replace(
+        '正文和引用 [关联知识](oqb://knowledge/k-two)。',
+        [
+          '示例 `oqb://question/not-a-question`。',
+          '```text',
+          'oqb://exam/not-an-exam',
+          '```',
+          '[关联知识](oqb://knowledge/k-two)。',
+        ].join('\n'),
+      ),
+    );
+
+    const result = await validateQuestionBankDirectory(rootDir);
+
+    expect(result.valid).toBe(true);
+    expect(result.diagnostics.map(({ code }) => code)).not.toContain('OQB-REF-003');
+  });
+
   it('release 模式在筛选后报告正文指向已移除内容的引用', async () => {
     const note = knowledgeMarkdown('k-one', '', '')
       .replace('oqb://knowledge/)。', 'oqb://knowledge/k-two)。')
@@ -258,7 +359,7 @@ describe('OpenQuestionBank Core', () => {
       kind: 'result',
       randomSeed: 'repeatable-seed',
       bankVersion: '1.0.0',
-      algorithmVersion: '1.0.0',
+      algorithmVersion: '1.2.0',
       items: [
         { kind: 'question', score: 2 },
         { kind: 'group', questions: [{ score: 1 }, { score: 1 }] },
@@ -368,6 +469,212 @@ describe('OpenQuestionBank Core', () => {
         availableCount: 0,
       }),
     );
+  });
+
+  it('先分配候选更紧的规则，避免宽规则随机占用必需题目', async () => {
+    await writeFile(
+      join(rootDir, 'questions/two.yaml'),
+      questionYaml('q-two', 'k-two').replace('difficulty: 入门', 'difficulty: 高级'),
+    );
+    await writeFile(
+      join(rootDir, 'exams/overlap.yaml'),
+      [
+        'id: exam-overlap',
+        'title: 重叠筛选规则',
+        'mode: generated',
+        'kind: template',
+        'rules:',
+        '  - unit: question',
+        '    count: 1',
+        '    scorePerQuestion: 1',
+        '  - unit: question',
+        '    count: 1',
+        '    scorePerQuestion: 1',
+        '    filters: { difficulty: 高级 }',
+      ].join('\n'),
+    );
+
+    const validated = await validateQuestionBankDirectory(rootDir);
+
+    expect(validated.valid).toBe(true);
+    const result = generateExam(validated.data, 'exam-overlap', 'seed-1');
+    expect(result.items.map((item) => item.kind === 'question' && item.questionId)).toEqual([
+      'q-one',
+      'q-two',
+    ]);
+  });
+
+  it('回溯跨规则候选选择，避免随机贪心误报候选不足', async () => {
+    const topicIds = ['topic-common', 'topic-rule-0', 'topic-rule-1', 'topic-rule-2'];
+    for (const id of topicIds) {
+      await writeFile(join(rootDir, `topics/${id}.yaml`), `id: ${id}\nname: ${id}\norder: 0\n`);
+    }
+
+    const questionSpecs = [
+      { id: 'q-a', topicIds: ['topic-common', 'topic-rule-0'] },
+      { id: 'q-x0', topicIds: ['topic-rule-0'] },
+      { id: 'q-y0', topicIds: ['topic-rule-0'] },
+      { id: 'q-b', topicIds: ['topic-common', 'topic-rule-1'] },
+      { id: 'q-x1', topicIds: ['topic-rule-1'] },
+      { id: 'q-y1', topicIds: ['topic-rule-1'] },
+      { id: 'q-c', topicIds: ['topic-common', 'topic-rule-2'] },
+      { id: 'q-x2', topicIds: ['topic-rule-2'] },
+      { id: 'q-y2', topicIds: ['topic-rule-2'] },
+      { id: 'q-d', topicIds: ['topic-common'] },
+      { id: 'q-e', topicIds: ['topic-common'] },
+    ];
+    for (const { id, topicIds: questionTopicIds } of questionSpecs) {
+      await writeFile(
+        join(rootDir, `questions/${id}.yaml`),
+        questionYaml(id, 'k-one').replace(
+          'topicIds: [topic-child]',
+          `topicIds: [${questionTopicIds.join(', ')}]`,
+        ),
+      );
+    }
+    await writeFile(
+      join(rootDir, 'exams/backtracking.yaml'),
+      [
+        'id: exam-backtracking',
+        'title: 重叠候选回溯',
+        'mode: generated',
+        'kind: template',
+        'rules:',
+        '  - unit: question',
+        '    count: 1',
+        '    scorePerQuestion: 1',
+        '    filters: { topicIds: [topic-rule-0] }',
+        '  - unit: question',
+        '    count: 1',
+        '    scorePerQuestion: 1',
+        '    filters: { topicIds: [topic-rule-1] }',
+        '  - unit: question',
+        '    count: 1',
+        '    scorePerQuestion: 1',
+        '    filters: { topicIds: [topic-rule-2] }',
+        '  - unit: question',
+        '    count: 3',
+        '    scorePerQuestion: 1',
+        '    filters: { topicIds: [topic-common] }',
+      ].join('\n'),
+    );
+
+    const validated = await validateQuestionBankDirectory(rootDir);
+
+    expect(validated.valid).toBe(true);
+    const result = generateExam(validated.data, 'exam-backtracking', 'seed-18');
+    const selectedIds = result.items.flatMap((item) =>
+      item.kind === 'question'
+        ? [item.questionId]
+        : item.questions.map(({ questionId }) => questionId),
+    );
+    expect(selectedIds).toHaveLength(6);
+    expect(new Set(selectedIds).size).toBe(6);
+    expect(result.algorithmVersion).toBe('1.2.0');
+  });
+
+  it('超出候选组合搜索上限时明确报告搜索未完成', async () => {
+    const topicIds = ['topic-first-rule', 'topic-second-rule', 'topic-shared'];
+    for (const id of topicIds) {
+      await writeFile(join(rootDir, `topics/${id}.yaml`), `id: ${id}\nname: ${id}\norder: 0\n`);
+    }
+
+    const questionSpecs = [
+      ...Array.from({ length: 9 }, (_, index) => ({
+        id: `q-first-${index}`,
+        topicIds: ['topic-first-rule'],
+      })),
+      ...Array.from({ length: 9 }, (_, index) => ({
+        id: `q-second-${index}`,
+        topicIds: ['topic-second-rule'],
+      })),
+      ...Array.from({ length: 21 }, (_, index) => ({
+        id: `q-shared-${index}`,
+        topicIds: ['topic-first-rule', 'topic-second-rule', 'topic-shared'],
+      })),
+    ];
+    for (const { id, topicIds: questionTopicIds } of questionSpecs) {
+      await writeFile(
+        join(rootDir, `questions/${id}.yaml`),
+        questionYaml(id, 'k-one').replace(
+          'topicIds: [topic-child]',
+          `topicIds: [${questionTopicIds.join(', ')}]`,
+        ),
+      );
+    }
+    await writeFile(
+      join(rootDir, 'exams/search-limit.yaml'),
+      [
+        'id: exam-search-limit',
+        'title: 搜索上限',
+        'mode: generated',
+        'kind: template',
+        'rules:',
+        '  - unit: question',
+        '    count: 20',
+        '    scorePerQuestion: 1',
+        '    filters: { topicIds: [topic-first-rule] }',
+        '  - unit: question',
+        '    count: 20',
+        '    scorePerQuestion: 1',
+        '    filters: { topicIds: [topic-second-rule] }',
+      ].join('\n'),
+    );
+
+    const validated = await validateQuestionBankDirectory(rootDir);
+
+    expect(validated.valid).toBe(true);
+    expect(() => generateExam(validated.data, 'exam-search-limit', 'search-limit-seed')).toThrow(
+      expect.objectContaining({ code: 'SEARCH_LIMIT_REACHED' }),
+    );
+  });
+
+  it('以迭代方式校验长考点树和知识前置链', () => {
+    const count = 9_000;
+    const topics = Array.from({ length: count }, (_, index) => ({
+      file: `topics/${index}.yaml`,
+      value: {
+        id: `topic-${index}`,
+        name: `考点 ${index}`,
+        order: index,
+        ...(index + 1 < count ? { parentId: `topic-${index + 1}` } : {}),
+      },
+    }));
+    const topicResult = validateQuestionBank({
+      rootDir,
+      topics,
+      knowledge: [],
+      questions: [],
+      groups: [],
+      exams: [],
+      diagnostics: [],
+    });
+    expect(topicResult.valid).toBe(true);
+
+    const knowledge = Array.from({ length: count }, (_, index) => ({
+      file: `knowledge/${index}.md`,
+      value: {
+        id: `knowledge-${index}`,
+        title: `知识 ${index}`,
+        body: '知识内容',
+        topicIds: [],
+        prerequisiteIds: index === 0 ? [] : [`knowledge-${index - 1}`],
+        relatedIds: [],
+        tags: [],
+        source: { type: 'original' as const },
+        review: { status: 'draft' as const },
+      },
+    }));
+    const knowledgeResult = validateQuestionBank({
+      rootDir,
+      topics: [],
+      knowledge,
+      questions: [],
+      groups: [],
+      exams: [],
+      diagnostics: [],
+    });
+    expect(knowledgeResult.valid).toBe(true);
   });
 
   it('将 Schema 结构错误定位到文件和字段', async () => {

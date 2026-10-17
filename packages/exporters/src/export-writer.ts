@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { constants, createReadStream } from 'node:fs';
-import { copyFile, lstat, mkdir, realpath, rename, rm, writeFile } from 'node:fs/promises';
-import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { copyFile, lstat, mkdir, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import type { Bank } from '@openquestionbank/schema';
 import type { QuestionBankData } from '@openquestionbank/core';
 import {
@@ -67,10 +67,6 @@ export async function prepareExportDirectory(
 
   const sourceRoot = await realpath(sourceDirectory);
   const targetDirectory = resolve(outputDirectory);
-  if (isPathWithin(sourceRoot, targetDirectory) && isPathWithin(targetDirectory, sourceRoot)) {
-    throw new Error(`导出目录不能与题库根目录相同：${targetDirectory}`);
-  }
-  assertOutputOutsideSourceCollections(sourceRoot, targetDirectory, bank, paths);
 
   try {
     const metadata = await lstat(targetDirectory);
@@ -83,10 +79,45 @@ export async function prepareExportDirectory(
     }
   }
 
+  const physicalTargetBeforeCreation = await resolvePhysicalPathBeforeCreation(targetDirectory);
+  if (
+    isPathWithin(sourceRoot, physicalTargetBeforeCreation) &&
+    isPathWithin(physicalTargetBeforeCreation, sourceRoot)
+  ) {
+    throw new Error(`导出目录不能与题库根目录相同：${physicalTargetBeforeCreation}`);
+  }
+  assertOutputOutsideSourceCollections(sourceRoot, physicalTargetBeforeCreation, bank, paths);
+
   await mkdir(targetDirectory, { recursive: true });
   const canonicalTarget = await realpath(targetDirectory);
   assertOutputOutsideSourceCollections(sourceRoot, canonicalTarget, bank, paths);
   return canonicalTarget;
+}
+
+/** 解析尚未创建的导出目录对应的物理路径 */
+async function resolvePhysicalPathBeforeCreation(targetDirectory: string): Promise<string> {
+  let currentPath = targetDirectory;
+  const missingSegments: string[] = [];
+
+  while (true) {
+    try {
+      const metadata = await stat(currentPath);
+      if (!metadata.isDirectory()) {
+        throw new Error(`导出路径的现有父级不是目录：${currentPath}`);
+      }
+      return resolve(await realpath(currentPath), ...missingSegments);
+    } catch (error) {
+      if (!isMissingPath(error)) {
+        throw error;
+      }
+      const parentPath = dirname(currentPath);
+      if (parentPath === currentPath) {
+        throw error;
+      }
+      missingSegments.unshift(basename(currentPath));
+      currentPath = parentPath;
+    }
+  }
 }
 
 /** 将校验过的资源复制到导出目录并生成校验信息 */

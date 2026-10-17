@@ -191,7 +191,7 @@ review:
 | `strict`  | 发布前审核       | 保留全部结构有效实体；内容实体必须为 `approved`，并满足来源授权信息要求。未满足时以错误报告    |
 | `release` | 生成发布候选内容 | 只保留审核通过且授权信息完整的知识、题目和题组；相关不可发布依赖会一并筛除，再校验最终引用关系 |
 
-三种模式的校验细节见 [Core 使用说明](docs/core.md)。非原创来源缺少来源链接或链接不是 HTTP / HTTPS 时会显示警告；Core 不联网检查链接可访问性。`release` 检查许可证和署名信息是否填写，不会判断许可证法律效力或许可证之间的兼容性。官方公开资料不自动代表允许转载。
+三种模式的校验细节见 [Core 使用说明](docs/core.md)。非原创来源缺少来源链接或链接不是 HTTP / HTTPS 时会显示警告；Core 不联网检查链接可访问性。`strict` 和 `release` 会拒绝空值及明确的待确认许可证或署名占位值，但不会判断许可证法律效力或许可证之间的兼容性。官方公开资料不自动代表允许转载。
 
 Core 会拒绝 Markdown 中的活动 HTML、脚本协议链接和包含活动内容的 SVG。正文可使用 `br`、`hr`、`sub`、`sup`、`kbd`、`mark`、`details`、`summary` 这些安全标签；代码块中的脚本示例不会触发安全诊断。质量检查会拒绝只含空白字符的必填文本，并对完全重复的题干发出警告；内容准确性、难度和干扰项质量仍需人工审核。
 
@@ -218,14 +218,14 @@ oqb export [目录] [--format json|github-markdown|obsidian|notion] [--out <目�
 
 ### 构建规则组卷并导出
 
-`build` 会先校验题库，再生成所选格式的导入包。题库中的规则组卷模板会在构建副本中替换为实际试卷结果；源目录中的 YAML 文件不会修改。若题库包含规则模板，必须提供 `--seed`，生成结果会记录随机种子、题库版本和算法版本。同一份题库、模板和种子会生成相同的题目及顺序。
+`build` 会先校验题库，再生成所选格式的导入包。题库中的规则组卷模板会在构建副本中替换为实际试卷结果；源目录中的 YAML 文件不会修改。若题库包含规则模板，必须提供 `--seed`，生成结果会记录随机种子、题库版本和算法版本。同一份题库、模板和种子会生成相同的题目及顺序。若规则候选重叠，算法会回溯尝试其他组合；最多检查 100,000 个候选组合，超过上限会报告搜索未完成。
 
 ```sh
 pnpm oqb build ./my-question-bank --seed practice-001 --format obsidian --out ./dist/practice-001
 pnpm oqb build ./my-question-bank --seed practice-001 --format notion --out ./dist/notion-practice-001
 ```
 
-`--format` 默认为 `json`，也可选择 `github-markdown`、`obsidian` 或 `notion`。没有规则组卷模板时，`--seed` 可省略。规则之间不会重复抽取题目；题组作为整体抽取，并按模板分值为每道子题设置分数。由于规则筛选结果可能重叠，单条规则候选充足仍不保证跨规则组合足够；发生冲突时，构建会报出具体规则和剩余候选数，不会减少题量。
+`--format` 默认为 `json`，也可选择 `github-markdown`、`obsidian` 或 `notion`。没有规则组卷模板时，`--seed` 可省略。规则之间不会重复抽取题目；题组作为整体抽取，并按模板分值为每道子题设置分数。若候选重叠，组卷器会回溯搜索可行组合；搜索超过 100,000 个候选组合时会返回 `SEARCH_LIMIT_REACHED`，此时需要收窄筛选条件或拆分试卷模板。
 
 ### 导出标准 JSON
 
@@ -288,7 +288,7 @@ pnpm oqb export ../my-question-bank --format notion --out ./dist/my-question-ban
 
 ### 为什么 `strict` 模式失败，而 `draft` 通过？
 
-`strict` 要求每条 Knowledge、Question 和 QuestionGroup 的 `review.status` 为 `approved`。它也要求题库许可证明确；非原创来源还需要填写 `source.license` 和 `source.attribution`。请确认审核和实际授权后再补齐字段，不要仅为消除诊断而填写。
+`strict` 要求每条 Knowledge、Question 和 QuestionGroup 的 `review.status` 为 `approved`。它也要求题库许可证明确；非原创来源还需要填写有效的 `source.license` 和 `source.attribution`。待确认占位值（例如 `TBD`、`unknown` 或 `TBD - not for publication`）不会被视为授权信息。请确认审核和实际授权后再补齐字段，不要仅为消除诊断而填写。
 
 ### 为什么实体 ID 不跟文件名走？
 

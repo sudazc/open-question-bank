@@ -90,13 +90,15 @@ https://github.com/sudazc/open-question-bank/blob/main/AI_GUIDE.md
 
 ## 写入、校验和交付
 
+开始前确认当前环境是否能创建文件、运行终端命令，以及是否已有可用的 OpenQuestionBank CLI。若需要 CLI 而当前工作区没有本项目，且环境允许访问网络和安装依赖，应将框架克隆到独立工作目录，再运行 `pnpm install --frozen-lockfile`、`pnpm build`，并确认 `pnpm oqb --help` 可用；不要把框架克隆到题库目录中，也不要覆盖用户已有文件。若无法取得 CLI，仍可在文件系统可用时生成题库源文件，但必须说明校验和导出命令未执行，并给出用户可运行的命令。
+
 如果当前 AI 环境可以创建文件：
 
 1. 将题库创建在用户指定的位置；未指定时先询问，或使用工作区中单独的题库目录，不要覆盖现有文件。
-2. 生成题库后，从 OpenQuestionBank 仓库根目录运行 `pnpm oqb validate <题库目录> --mode draft`。
-3. 修复 Schema、ID、关系和资源错误，再运行 `pnpm oqb stats <题库目录>` 汇报实际数量。
-4. 题库校验后，询问或遵循用户选择的交付方式。若题库含规则组卷模板并且用户需要实际试卷，运行 `pnpm oqb build <题库目录> --seed <可复现的随机种子> --format <格式> --out <输出目录>`；构建只在导出包中把模板替换为生成结果，不修改源题库。若不需要生成试卷，则运行 `pnpm oqb export <题库目录> --format <格式> --out <输出目录>`。`<格式>` 可选 `obsidian` 或 `notion`。Obsidian 导出为可直接打开的 Vault，答案与解析默认折叠并带上一题 / 下一题导航；Notion 导出为 CSV 和 Markdown 文件包，题目与答案解析分表，便于先练习再查看答案。Notion 原生 Relation 需要用户在 Notion 内手动创建。
-5. 如果当前环境没有 CLI 或文件系统访问能力，提供完整目录树和文件内容，并附上用户可执行的校验命令。不要声称未运行的校验已经通过。
+2. CLI 可用时，生成题库后从已构建的 OpenQuestionBank 仓库根目录运行 `pnpm oqb validate <题库目录> --mode draft`。CLI 不可用时，明确说明本次没有运行校验。
+3. CLI 可用时修复 Schema、ID、关系和资源错误，再运行 `pnpm oqb stats <题库目录>` 汇报实际数量。没有运行 CLI 时不要编造统计数量。
+4. 题库校验后，询问或遵循用户选择的交付方式。CLI 可用且题库含规则组卷模板、用户需要实际试卷时，运行 `pnpm oqb build <题库目录> --seed <可复现的随机种子> --format <格式> --out <输出目录>`；构建只在导出包中把模板替换为生成结果，不修改源题库。若不需要生成试卷，则运行 `pnpm oqb export <题库目录> --format <格式> --out <输出目录>`。`<格式>` 可选 `obsidian` 或 `notion`。Obsidian 导出为可直接打开的 Vault，答案与解析默认折叠并带上一题 / 下一题导航；Notion 导出为 CSV 和 Markdown 文件包，题目与答案解析分表，便于先练习再查看答案。Notion 原生 Relation 需要用户在 Notion 内手动创建。CLI 不可用时只提供可执行命令，不要声称导出包已经生成。
+5. 如果当前环境没有文件系统访问能力，提供完整目录树和文件内容，并附上用户可执行的校验命令。不要声称未运行的校验已经通过。
 
 生成完成后说明：题库保存位置、主题和题目数量、采用的题型 / 难度、检索或使用的资料来源、验证结果和导出文件位置，以及仍需用户确认的内容和授权信息。题库源文件（YAML / Markdown）是可继续维护的数据；Obsidian Vault 与 Notion 导入包是按需生成的交付格式。
 
