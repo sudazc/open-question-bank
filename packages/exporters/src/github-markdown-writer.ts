@@ -3,6 +3,8 @@ import {
   collectExportAssetSources,
   copyExportAssets,
   prepareExportDirectory,
+  readPreviousExportFiles,
+  removeStaleExportFiles,
   writeExportFiles,
 } from './export-writer.js';
 import {
@@ -31,9 +33,14 @@ export async function writeQuestionBankGithubMarkdownExport(
     ...getQuestionBankGithubMarkdownFilePaths(data),
     ...assetSources.map(({ path }) => path),
   ]);
+  const previousFiles = await readPreviousExportFiles(targetDirectory);
   const assets = await copyExportAssets(assetSources, targetDirectory);
   const exported = createQuestionBankGithubMarkdownExport(data, assets);
   await writeExportFiles(targetDirectory, exported.files);
+  await removeStaleExportFiles(targetDirectory, previousFiles, [
+    ...exported.files.map(({ path }) => path),
+    ...assetSources.map(({ path }) => path),
+  ]);
 
   return { manifest: exported.manifest, outputDirectory: targetDirectory };
 }

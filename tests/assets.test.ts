@@ -1,9 +1,13 @@
-import { mkdtemp, mkdir, readdir, rm, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { mkdtemp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { validateQuestionBankDirectory } from '../packages/core/src/index.js';
-import { prepareExportDirectory } from '../packages/exporters/src/export-writer.js';
+import {
+  prepareExportDirectory,
+  removeStaleExportFiles,
+} from '../packages/exporters/src/export-writer.js';
 import { bank } from './fixtures.js';
 
 describe('Core 资源校验', () => {
@@ -122,6 +126,28 @@ describe('Core 资源校验', () => {
       prepareExportDirectory(rootDir, outputDir, bank, ['topics/Name.md', 'topics/name.md']),
     ).rejects.toThrow('大小写或 Unicode 规范化不敏感');
     expect(await readdir(rootDir)).not.toContain('portable-collision-output');
+  });
+
+  it('旧文件路径与当前路径可能指向同一文件时保留当前文件', async () => {
+    const outputDir = join(rootDir, 'portable-path-output');
+    const contents = '生成的页面';
+    await mkdir(outputDir);
+    await writeFile(join(outputDir, 'Old.md'), contents);
+    await writeFile(join(outputDir, 'old.md'), contents);
+
+    await removeStaleExportFiles(
+      outputDir,
+      [
+        {
+          path: 'Old.md',
+          sizeBytes: Buffer.byteLength(contents, 'utf8'),
+          sha256: createHash('sha256').update(contents).digest('hex'),
+        },
+      ],
+      ['old.md'],
+    );
+
+    expect(await readFile(join(outputDir, 'old.md'), 'utf8')).toBe(contents);
   });
 
   it('忽略外部链接和代码片段中的示例链接', async () => {

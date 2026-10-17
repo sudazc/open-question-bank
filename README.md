@@ -213,6 +213,7 @@ oqb export <格式> [目录] [--out <目录>] [--mode draft|strict|release]
 - `stats` 按指定模式统计考点、知识、题目、题组和试卷；统计的是校验器保留的结构有效实体。
 - `doctor` 检查 Node.js 版本、`bank.yaml` 加载结果和题库校验状态。
 - `export` 先校验题库，再按所选格式生成数据包和 `manifest.json`。格式默认为 `json`，也可以选择 `github-markdown`、`obsidian` 或 `notion`。输出目录默认为命令运行目录下的 `dist`；也可以使用 `--out` 指定路径。`--mode release` 只导出通过发布筛选和最终引用校验的数据。
+- 对已有导出目录再次导出时，工具会根据上一份 OpenQuestionBank 清单移除本次不再生成且内容未被修改的旧文件；用户修改过的旧文件和清单未登记的文件会保留。
 - `export` 也支持 `pnpm oqb export github <目录>`、`pnpm oqb export obsidian <目录>`、`pnpm oqb export notion <目录>` 和 `pnpm oqb export json <目录>`。其中 `github` 是 `github-markdown` 的简写。格式位置参数与 `--format` 不能同时使用；如果题库目录名恰好是 `github`、`obsidian`、`notion` 或 `json`，请将目录写成 `./名称` 或改用 `--format`。
 - 未知命令、参数错误或执行错误使用退出码 `2`；通过使用退出码 `0`。警告不会单独导致校验失败。
 
@@ -239,7 +240,7 @@ pnpm oqb build ./my-question-bank --seed practice-001 --format notion --out ./di
 pnpm oqb export ../my-question-bank --format json --out ./dist/my-question-bank
 ```
 
-导出包包含完整的 Bank、Topic、Knowledge、Question、QuestionGroup 和 Exam 数据，并保留 Markdown 正文、稳定 ID、资源相对路径及实体引用；题库引用到的资源文件也会按原路径复制。实体集合按 ID 稳定排序，导出的 `manifest.json` 提供题库版本、实体统计、JSON 和资源文件的大小及 SHA-256，便于自动化检查和后续导入。校验失败时不会生成文件；警告会显示，但不会单独阻止导出。重复导出会更新生成文件，其他文件保持原样。
+导出包包含完整的 Bank、Topic、Knowledge、Question、QuestionGroup 和 Exam 数据，并保留 Markdown 正文、稳定 ID、资源相对路径及实体引用；题库引用到的资源文件也会按原路径复制。实体集合按 ID 稳定排序，导出的 `manifest.json` 提供题库版本、实体统计、JSON 和资源文件的大小及 SHA-256，便于自动化检查和后续导入。校验失败时不会生成文件；警告会显示，但不会单独阻止导出。重复导出会更新当前仍生成的文件；本次不再生成且与上一份清单校验值一致的旧文件会移除，用户修改过的旧文件和清单未登记文件会保留。
 
 导出格式字段、目录结构和可复现规则见 [标准 JSON 导出说明](docs/export-json.md)。
 

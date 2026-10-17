@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { existsSync } from 'node:fs';
 import { lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -256,6 +257,94 @@ describe('OpenQuestionBank CLI', () => {
     expect(await readFile(join(exportDir, '题库首页.md'), 'utf8')).toBe(readme);
     expect(await readFile(join(exportDir, 'manifest.json'), 'utf8')).toBe(firstManifest);
     expect(stdout.join('\n')).toContain('Obsidian Vault 导出完成');
+  });
+
+  it('重新导出时移除清单中已删除且未修改的题目页', async () => {
+    const bankDir = join(rootDir, 'bank');
+    const exportDir = join(rootDir, 'dist', 'obsidian');
+    const sourceQuestion = join(bankDir, 'questions', 'example.yaml');
+    const questionPage = join(
+      exportDir,
+      '题目',
+      'OpenQuestionBank 的源数据主要使用什么方式维护？.md',
+    );
+    await runCli(['init', bankDir], output);
+    const firstExitCode = await runCli(
+      ['export', bankDir, '--format', 'obsidian', '--out', exportDir],
+      output,
+    );
+    await rm(sourceQuestion);
+    const secondExitCode = await runCli(
+      ['export', bankDir, '--format', 'obsidian', '--out', exportDir],
+      output,
+    );
+    const manifest = JSON.parse(await readFile(join(exportDir, 'manifest.json'), 'utf8')) as {
+      files: Array<{ path: string }>;
+    };
+
+    expect(firstExitCode).toBe(0);
+    expect(secondExitCode).toBe(0);
+    expect(manifest.files.map(({ path }) => path)).not.toContain(
+      '题目/OpenQuestionBank 的源数据主要使用什么方式维护？.md',
+    );
+    expect(existsSync(questionPage)).toBe(false);
+  });
+
+  it('重新导出时保留用户修改过的旧页面和未登记文件', async () => {
+    const bankDir = join(rootDir, 'bank');
+    const exportDir = join(rootDir, 'dist', 'obsidian');
+    const sourceQuestion = join(bankDir, 'questions', 'example.yaml');
+    const questionPage = join(
+      exportDir,
+      '题目',
+      'OpenQuestionBank 的源数据主要使用什么方式维护？.md',
+    );
+    const customFile = join(exportDir, '我的笔记.md');
+    await runCli(['init', bankDir], output);
+    await runCli(['export', bankDir, '--format', 'obsidian', '--out', exportDir], output);
+    await writeFile(questionPage, '用户修改的页面');
+    await writeFile(customFile, '用户添加的文件');
+    await rm(sourceQuestion);
+
+    const exitCode = await runCli(
+      ['export', bankDir, '--format', 'obsidian', '--out', exportDir],
+      output,
+    );
+
+    expect(exitCode).toBe(0);
+    expect(await readFile(questionPage, 'utf8')).toBe('用户修改的页面');
+    expect(await readFile(customFile, 'utf8')).toBe('用户添加的文件');
+  });
+
+  it('忽略未知格式的旧清单并保留其中列出的文件', async () => {
+    const bankDir = join(rootDir, 'bank');
+    const exportDir = join(rootDir, 'dist', 'obsidian');
+    const customFile = join(exportDir, '我的笔记.md');
+    const contents = '用户添加的文件';
+    await runCli(['init', bankDir], output);
+    await mkdir(exportDir, { recursive: true });
+    await writeFile(customFile, contents);
+    await writeFile(
+      join(exportDir, 'manifest.json'),
+      JSON.stringify({
+        format: 'openquestionbank-unknown-format',
+        files: [
+          {
+            path: '我的笔记.md',
+            sizeBytes: Buffer.byteLength(contents, 'utf8'),
+            sha256: createHash('sha256').update(contents).digest('hex'),
+          },
+        ],
+      }),
+    );
+
+    const exitCode = await runCli(
+      ['export', bankDir, '--format', 'obsidian', '--out', exportDir],
+      output,
+    );
+
+    expect(exitCode).toBe(0);
+    expect(await readFile(customFile, 'utf8')).toBe(contents);
   });
 
   it('校验后生成 Notion CSV / Markdown 导入包和可复现清单', async () => {

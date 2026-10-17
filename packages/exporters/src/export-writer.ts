@@ -1,6 +1,16 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { constants, createReadStream } from 'node:fs';
-import { copyFile, lstat, mkdir, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
+import {
+  copyFile,
+  lstat,
+  mkdir,
+  readFile,
+  realpath,
+  rename,
+  rm,
+  stat,
+  writeFile,
+} from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import type { Bank } from '@openquestionbank/schema';
 import type { QuestionBankData } from '@openquestionbank/core';
@@ -20,6 +30,19 @@ export interface ExportFile {
   path: string;
   contents: string;
 }
+
+interface PreviousExportFile {
+  path: string;
+  sizeBytes: number;
+  sha256: string;
+}
+
+const knownExportFormats = new Set([
+  'openquestionbank-json',
+  'openquestionbank-github-markdown',
+  'openquestionbank-obsidian-vault',
+  'openquestionbank-notion-import',
+]);
 
 /** 收集并校验题库声明的资源文件 */
 export async function collectExportAssetSources(
@@ -167,6 +190,102 @@ export async function writeExportFiles(
   }
 }
 
+/** 读取上一版 OpenQuestionBank 导出清单中的文件记录 */
+export async function readPreviousExportFiles(outputRoot: string): Promise<PreviousExportFile[]> {
+  const manifestPath = join(outputRoot, 'manifest.json');
+  let metadata;
+  try {
+    metadata = await lstat(manifestPath);
+  } catch (error) {
+    if (isMissingPath(error)) {
+      return [];
+    }
+    throw error;
+  }
+  if (metadata.isSymbolicLink() || !metadata.isFile() || metadata.size > 67_108_864) {
+    return [];
+  }
+
+  let manifest: unknown;
+  try {
+    manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      return [];
+    }
+    throw error;
+  }
+  if (
+    !isRecord(manifest) ||
+    typeof manifest.format !== 'string' ||
+    !knownExportFormats.has(manifest.format) ||
+    !Array.isArray(manifest.files)
+  ) {
+    return [];
+  }
+
+  const files: PreviousExportFile[] = [];
+  for (const entry of manifest.files) {
+    if (!isRecord(entry)) {
+      continue;
+    }
+    const { path, sizeBytes, sha256 } = entry;
+    if (
+      typeof path !== 'string' ||
+      path === 'manifest.json' ||
+      !Number.isSafeInteger(sizeBytes) ||
+      typeof sizeBytes !== 'number' ||
+      sizeBytes < 0 ||
+      typeof sha256 !== 'string' ||
+      !/^[0-9a-f]{64}$/.test(sha256)
+    ) {
+      continue;
+    }
+    try {
+      assertSafeExportPath(path, '上一版导出文件路径');
+    } catch {
+      continue;
+    }
+    files.push({ path, sizeBytes, sha256 });
+  }
+  return files;
+}
+
+/** 删除上一版清单登记且本次未生成、内容也未被修改的文件 */
+export async function removeStaleExportFiles(
+  outputRoot: string,
+  previousFiles: readonly PreviousExportFile[],
+  currentPaths: readonly string[],
+): Promise<void> {
+  const currentPathsByKey = new Map(
+    currentPaths.map((path) => [getPortablePathKey(path), path] as const),
+  );
+  for (const previousFile of previousFiles) {
+    const currentPath = currentPathsByKey.get(getPortablePathKey(previousFile.path));
+    if (currentPath === previousFile.path) {
+      continue;
+    }
+    const target = await getExistingOutputFile(outputRoot, previousFile.path);
+    if (!target) {
+      continue;
+    }
+    if (
+      currentPath &&
+      (await mayBeSameFile(target, resolveSafeRelativePath(outputRoot, currentPath)))
+    ) {
+      continue;
+    }
+    const currentFile = await describeExportAsset(previousFile.path, target);
+    if (
+      currentFile.sizeBytes !== previousFile.sizeBytes ||
+      currentFile.sha256 !== previousFile.sha256
+    ) {
+      continue;
+    }
+    await rm(target);
+  }
+}
+
 function assertOutputOutsideSourceCollections(
   sourceRoot: string,
   outputDirectory: string,
@@ -213,6 +332,56 @@ async function prepareExportParent(outputRoot: string, relativePath: string): Pr
   }
 }
 
+async function getExistingOutputFile(
+  outputRoot: string,
+  relativePath: string,
+): Promise<string | undefined> {
+  const segments = relativePath.split('/');
+  let currentDirectory = outputRoot;
+  for (const segment of segments.slice(0, -1)) {
+    currentDirectory = join(currentDirectory, segment);
+    try {
+      const metadata = await lstat(currentDirectory);
+      if (metadata.isSymbolicLink() || !metadata.isDirectory()) {
+        return undefined;
+      }
+    } catch (error) {
+      if (isMissingPath(error)) {
+        return undefined;
+      }
+      throw error;
+    }
+  }
+
+  const target = resolveSafeRelativePath(outputRoot, relativePath);
+  try {
+    const metadata = await lstat(target);
+    return metadata.isFile() && !metadata.isSymbolicLink() ? target : undefined;
+  } catch (error) {
+    if (isMissingPath(error)) {
+      return undefined;
+    }
+    throw error;
+  }
+}
+
+async function mayBeSameFile(left: string, right: string): Promise<boolean> {
+  try {
+    const [leftMetadata, rightMetadata] = await Promise.all([stat(left), stat(right)]);
+    return (
+      leftMetadata.isFile() &&
+      rightMetadata.isFile() &&
+      leftMetadata.dev === rightMetadata.dev &&
+      (leftMetadata.ino === 0 || rightMetadata.ino === 0 || leftMetadata.ino === rightMetadata.ino)
+    );
+  } catch (error) {
+    if (isMissingPath(error)) {
+      return false;
+    }
+    throw error;
+  }
+}
+
 async function withTemporaryExportFile(
   target: string,
   writeTemporary: (temporary: string) => Promise<void>,
@@ -244,8 +413,16 @@ function isPathWithin(parent: string, target: string): boolean {
   );
 }
 
+function getPortablePathKey(path: string): string {
+  return path.normalize('NFC').toUpperCase().toLowerCase();
+}
+
 function isMissingPath(error: unknown): boolean {
   return typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT';
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function compareStrings(left: string, right: string): number {
