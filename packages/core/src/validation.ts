@@ -54,7 +54,7 @@ export function validateQuestionBank(
     removeExcludedAssetDiagnostics(located, publishable, diagnostics);
   }
   validateContentSecurity(publishable, diagnostics);
-  validateContentQuality(publishable, diagnostics);
+  validateContentQuality(publishable, diagnostics, mode);
   validateSemantics(publishable, diagnostics);
   const data: QuestionBankData = {
     ...(publishable.bank === undefined ? {} : { bank: publishable.bank.value }),

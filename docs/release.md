@@ -47,6 +47,6 @@ Get-Content .\SHA256SUMS
 
 ## 标签与自动发布
 
-仓库的 Release 工作流由 `v*` Git 标签触发，并要求标签严格匹配根目录及全部 Workspace 包的 SemVer 版本，例如根目录版本为 `0.1.0` 时使用 `v0.1.0`。工作流会安装锁定依赖、运行检查、生成预构建包、核对 SHA-256，并在隔离目录安装运行依赖后试跑 `oqb --help`、`init` 与 `validate`。
+仓库的 Release 工作流由 `v*` Git 标签触发，并要求标签严格匹配根目录及全部 Workspace 包的 SemVer 版本，例如根目录版本为 `0.1.0` 时使用 `v0.1.0`。工作流会安装锁定依赖、运行检查、生成预构建包并核对 SHA-256，然后在隔离目录安装发布包的运行依赖，试跑 `oqb --help`、初始化与校验，并分别导出 Obsidian Vault 和 Notion 导入包，确认首页、清单及题目 / 答案 CSV 已生成。这样可以检查用户下载后的包能够完成从初始化到平台导出的主要流程。
 
 Pull Request 和 `main` 分支提交会在 Linux、Windows、macOS 上运行 CI。各包不发布到 npm；当前 Release 产物仅通过 GitHub Releases 分发。

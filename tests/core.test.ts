@@ -248,6 +248,19 @@ describe('OpenQuestionBank Core', () => {
     expect(result.diagnostics.map(({ code }) => code)).not.toContain('OQB-REF-003');
   });
 
+  it('校验反斜杠转义反引号外的 Markdown 内部引用', async () => {
+    const note = knowledgeMarkdown('k-one', '', '').replace(
+      '正文和引用 [关联知识](oqb://knowledge/)。',
+      '\\`[失效](oqb://question/missing-question)\\`',
+    );
+    await writeFile(join(rootDir, 'knowledge/one.md'), note);
+
+    const result = await validateQuestionBankDirectory(rootDir);
+
+    expect(result.valid).toBe(false);
+    expect(result.diagnostics.map(({ code }) => code)).toContain('OQB-REF-003');
+  });
+
   it('release 模式在筛选后报告正文指向已移除内容的引用', async () => {
     const note = knowledgeMarkdown('k-one', '', '')
       .replace('oqb://knowledge/)。', 'oqb://knowledge/k-two)。')
@@ -477,6 +490,70 @@ describe('OpenQuestionBank Core', () => {
     expect(result.diagnostics.map(({ code }) => code)).toContain('OQB-SECURITY-002');
   });
 
+  it('不会将反斜杠转义的反引号内容误判为代码示例', async () => {
+    const note = knowledgeMarkdown('k-one', '', '').replace(
+      '正文和引用 [关联知识](oqb://knowledge/)。',
+      '\\`<script>alert(1)</script>\\`',
+    );
+    await writeFile(join(rootDir, 'knowledge/one.md'), note);
+
+    const result = await validateQuestionBankDirectory(rootDir);
+
+    expect(result.valid).toBe(false);
+    expect(result.diagnostics.map(({ code }) => code)).toContain('OQB-SECURITY-001');
+  });
+
+  it('不会把首个反引号被转义的连续片段误当作代码跨度', async () => {
+    const note = knowledgeMarkdown('k-one', '', '').replace(
+      '正文和引用 [关联知识](oqb://knowledge/)。',
+      String.fromCharCode(92) + '``<script>alert(1)</script>' + String.fromCharCode(92) + '`',
+    );
+    await writeFile(join(rootDir, 'knowledge/one.md'), note);
+
+    const result = await validateQuestionBankDirectory(rootDir);
+
+    expect(result.valid).toBe(false);
+    expect(result.diagnostics.map(({ code }) => code)).toContain('OQB-SECURITY-001');
+  });
+
+  it('不会把含反引号信息字符串的无效围栏当作代码块', async () => {
+    const note = knowledgeMarkdown('k-one', '', '').replace(
+      '正文和引用 [关联知识](oqb://knowledge/)。',
+      '```bad` info\n<script>alert(1)</script>',
+    );
+    await writeFile(join(rootDir, 'knowledge/one.md'), note);
+
+    const result = await validateQuestionBankDirectory(rootDir);
+
+    expect(result.valid).toBe(false);
+    expect(result.diagnostics.map(({ code }) => code)).toContain('OQB-SECURITY-001');
+  });
+
+  it('允许波浪号围栏的信息字符串包含反引号', async () => {
+    const note = knowledgeMarkdown('k-one', '', '').replace(
+      '正文和引用 [关联知识](oqb://knowledge/)。',
+      '~~~bad` info\n<script>alert(1)</script>\n~~~',
+    );
+    await writeFile(join(rootDir, 'knowledge/one.md'), note);
+
+    const result = await validateQuestionBankDirectory(rootDir);
+
+    expect(result.valid).toBe(true);
+  });
+
+  it('继续忽略真正的 Markdown 行内代码示例', async () => {
+    const note = knowledgeMarkdown('k-one', '', '').replace(
+      '正文和引用 [关联知识](oqb://knowledge/)。',
+      '`<script>alert(1)</script>`',
+    );
+    await writeFile(join(rootDir, 'knowledge/one.md'), note);
+
+    const result = await validateQuestionBankDirectory(rootDir);
+
+    expect(result.valid).toBe(true);
+    expect(result.diagnostics).toEqual([]);
+  });
+
   it('报告空白题干错误和完全重复题干警告', async () => {
     await writeFile(
       join(rootDir, 'questions/one.yaml'),
@@ -510,6 +587,70 @@ describe('OpenQuestionBank Core', () => {
         fieldPath: 'stem',
       }),
     );
+  });
+
+  it('拒绝只包含空白的许可证、维护者名称、难度和答案内容', async () => {
+    const bankPath = join(rootDir, 'bank.yaml');
+    const bank = await readFile(bankPath, 'utf8');
+    await writeFile(
+      bankPath,
+      bank
+        .replace('license: CC-BY-4.0', 'license: "   "')
+        .replace('name: OpenQuestionBank', 'name: "   "'),
+    );
+    await writeFile(
+      join(rootDir, 'questions/one.yaml'),
+      questionYaml('q-one', 'k-one').replace('difficulty: 入门', 'difficulty: "   "'),
+    );
+    await writeFile(
+      join(rootDir, 'questions/two.yaml'),
+      questionYaml('q-two', 'k-two')
+        .replace('type: true_false', 'type: fill_blank')
+        .replace(
+          'answer: true',
+          ['answer:', '  blanks:', '    - id: blank-one', '      acceptedAnswers: ["   "]'].join(
+            '\n',
+          ),
+        ),
+    );
+    await writeFile(
+      join(rootDir, 'questions/short-answer.yaml'),
+      questionYaml('q-short', 'k-one')
+        .replace('type: true_false', 'type: short_answer')
+        .replace(
+          'answer: true',
+          [
+            'answer:',
+            '  referenceAnswer: "   "',
+            '  rubric:',
+            '    - id: criterion-one',
+            '      description: "   "',
+            '      score: 1',
+          ].join('\n'),
+        ),
+    );
+
+    const draft = await validateQuestionBankDirectory(rootDir);
+    const blankFields = draft.diagnostics
+      .filter(({ code }) => code === 'OQB-QUALITY-001')
+      .map(({ entityId, fieldPath }) => `${entityId}.${fieldPath}`);
+
+    expect(draft.valid).toBe(false);
+    expect(blankFields).toEqual(
+      expect.arrayContaining([
+        'sample-bank.license',
+        'sample-bank.maintainers[0].name',
+        'q-one.difficulty',
+        'q-two.answer.blanks[0].acceptedAnswers[0]',
+        'q-short.answer.referenceAnswer',
+        'q-short.answer.rubric[0].description',
+      ]),
+    );
+
+    const strict = await validateQuestionBankDirectory(rootDir, { mode: 'strict' });
+    expect(
+      strict.diagnostics.filter(({ fieldPath }) => fieldPath === 'license').map(({ code }) => code),
+    ).toEqual(['OQB-LICENSE-004']);
   });
 
   it('生成时报告多条规则之间的候选冲突', async () => {

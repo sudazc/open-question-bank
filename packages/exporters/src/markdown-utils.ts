@@ -7,7 +7,9 @@ export function maskMarkdownCode(markdown: string): string {
     const newlineIndex = markdown.indexOf('\n', lineStart);
     const lineEnd = newlineIndex < 0 ? markdown.length : newlineIndex;
     const line = markdown.slice(lineStart, lineEnd).replace(/\r$/, '');
-    const fenceMatch = /^ {0,3}(`{3,}|~{3,})/.exec(line);
+    const fenceMatch = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+    const fenceMarker = fenceMatch?.[1];
+    const fenceInfo = fenceMatch?.[2] ?? '';
     if (fence) {
       const closingMatch = /^ {0,3}(`+|~+)[ \t]*$/.exec(line);
       maskMarkdownRange(characters, lineStart, lineEnd);
@@ -19,8 +21,8 @@ export function maskMarkdownCode(markdown: string): string {
       ) {
         fence = undefined;
       }
-    } else if (fenceMatch?.[1]) {
-      fence = { marker: fenceMatch[1][0] ?? '', length: fenceMatch[1].length };
+    } else if (fenceMarker && !(fenceMarker[0] === '`' && fenceInfo.includes('`'))) {
+      fence = { marker: fenceMarker[0] ?? '', length: fenceMarker.length };
       maskMarkdownRange(characters, lineStart, lineEnd);
     }
     lineStart = newlineIndex < 0 ? markdown.length : newlineIndex + 1;
@@ -30,16 +32,34 @@ export function maskMarkdownCode(markdown: string): string {
   const backtick = String.fromCharCode(96);
   const runs: Array<{ start: number; end: number; length: number }> = [];
   let index = 0;
+  let backslashCount = 0;
   while (index < masked.length) {
-    if (masked[index] !== backtick) {
+    if (masked[index] === '\\') {
+      backslashCount += 1;
       index += 1;
       continue;
     }
+    if (masked[index] !== backtick) {
+      backslashCount = 0;
+      index += 1;
+      continue;
+    }
+    const start = index;
     let runLength = 1;
     while (masked[index + runLength] === backtick) {
       runLength += 1;
     }
-    runs.push({ start: index, end: index + runLength, length: runLength });
+    const escaped = backslashCount % 2 === 1;
+    const delimiterLength = runLength - (escaped ? 1 : 0);
+    if (delimiterLength > 0) {
+      const delimiterStart = start + (escaped ? 1 : 0);
+      runs.push({
+        start: delimiterStart,
+        end: start + runLength,
+        length: delimiterLength,
+      });
+    }
+    backslashCount = 0;
     index += runLength;
   }
 
@@ -55,9 +75,12 @@ export function maskMarkdownCode(markdown: string): string {
   }
   for (let runIndex = 0; runIndex < runs.length; runIndex += 1) {
     const run = runs[runIndex];
+    if (!run) {
+      continue;
+    }
     const closingRunIndex = nextRunIndices[runIndex];
     const closingRun = closingRunIndex === undefined ? undefined : runs[closingRunIndex];
-    if (!run || closingRunIndex === undefined || !closingRun) {
+    if (closingRunIndex === undefined || !closingRun) {
       continue;
     }
     maskMarkdownRange(characters, run.start, closingRun.end);

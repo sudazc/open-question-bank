@@ -61,7 +61,12 @@ export async function runCli(
   }
 
   const { positionals, values } = parsed;
-  const [command, ...arguments_] = positionals;
+  const [command, ...parsedArguments] = positionals;
+  let arguments_ = parsedArguments;
+  const positionalFormat = command === 'export' ? parseExportFormatAlias(arguments_[0]) : undefined;
+  if (positionalFormat !== undefined) {
+    arguments_ = arguments_.slice(1);
+  }
   if (values.help || command === 'help' || command === undefined) {
     printHelp(output);
     return 0;
@@ -91,6 +96,10 @@ export async function runCli(
   const formatValue = values.format;
   if (formatValue !== undefined && typeof formatValue !== 'string') {
     output.stderr('--format 必须指定 json、github-markdown、obsidian 或 notion');
+    return 2;
+  }
+  if (positionalFormat !== undefined && formatValue !== undefined) {
+    output.stderr('格式位置参数与 --format 不能同时使用');
     return 2;
   }
   if (command !== 'export' && command !== 'build' && formatValue !== undefined) {
@@ -152,7 +161,7 @@ export async function runCli(
         return await exportCommand(
           directory,
           mode,
-          isExportFormat(formatValue) ? formatValue : 'json',
+          isExportFormat(formatValue) ? formatValue : (positionalFormat ?? 'json'),
           outputDirectory ?? 'dist',
           output,
         );
@@ -443,6 +452,15 @@ function isExportFormat(value: string | undefined): value is (typeof exportForma
   return value !== undefined && exportFormats.some((format) => format === value);
 }
 
+function parseExportFormatAlias(
+  value: string | undefined,
+): (typeof exportFormats)[number] | undefined {
+  if (value === 'github') {
+    return 'github-markdown';
+  }
+  return isExportFormat(value) ? value : undefined;
+}
+
 function isSupportedNode(version: string): boolean {
   const [major = 0, minor = 0] = version.split('.').map(Number);
   return major > 22 || (major === 22 && minor >= 13);
@@ -469,6 +487,7 @@ function printHelp(output: CliOutput): void {
   oqb stats [目录] [--mode draft|strict|release]
   oqb doctor [目录] [--mode draft|strict|release]
   oqb export [目录] [--format json|github-markdown|obsidian|notion] [--out <目录>] [--mode draft|strict|release]
+  oqb export <格式> [目录] [--out <目录>] [--mode draft|strict|release]
   oqb build [目录] [--format json|github-markdown|obsidian|notion] [--out <目录>] [--mode draft|strict|release] [--seed <随机种子>]
   oqb --help
 
@@ -477,7 +496,7 @@ function printHelp(output: CliOutput): void {
   validate  校验题库结构、引用、资源及审核授权要求
   stats     统计当前模式下保留的有效题库实体
   doctor    检查 Node.js 环境、bank.yaml 和题库校验结果
-  export    校验题库后生成 JSON、GitHub Markdown、Obsidian Vault 或 Notion 导入包
+  export    校验题库后生成 JSON、GitHub Markdown、Obsidian Vault 或 Notion 导入包；格式也可作为位置参数
   build     构建所选格式；题库含规则组卷模板时使用 --seed 生成试卷结果
 
 选项：

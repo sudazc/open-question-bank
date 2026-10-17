@@ -204,6 +204,7 @@ oqb build [目录] [--format json|github-markdown|obsidian|notion] [--out <目�
 oqb stats [目录] [--mode draft|strict|release]
 oqb doctor [目录] [--mode draft|strict|release]
 oqb export [目录] [--format json|github-markdown|obsidian|notion] [--out <目录>] [--mode draft|strict|release]
+oqb export <格式> [目录] [--out <目录>] [--mode draft|strict|release]
 ```
 
 - `init` 从仓库模板创建题库。省略目录时使用当前目录；目标目录必须不存在或为空。
@@ -212,6 +213,7 @@ oqb export [目录] [--format json|github-markdown|obsidian|notion] [--out <目�
 - `stats` 按指定模式统计考点、知识、题目、题组和试卷；统计的是校验器保留的结构有效实体。
 - `doctor` 检查 Node.js 版本、`bank.yaml` 加载结果和题库校验状态。
 - `export` 先校验题库，再按所选格式生成数据包和 `manifest.json`。格式默认为 `json`，也可以选择 `github-markdown`、`obsidian` 或 `notion`。输出目录默认为命令运行目录下的 `dist`；也可以使用 `--out` 指定路径。`--mode release` 只导出通过发布筛选和最终引用校验的数据。
+- `export` 也支持 `pnpm oqb export github <目录>`、`pnpm oqb export obsidian <目录>`、`pnpm oqb export notion <目录>` 和 `pnpm oqb export json <目录>`。其中 `github` 是 `github-markdown` 的简写。格式位置参数与 `--format` 不能同时使用；如果题库目录名恰好是 `github`、`obsidian`、`notion` 或 `json`，请将目录写成 `./名称` 或改用 `--format`。
 - 未知命令、参数错误或执行错误使用退出码 `2`；通过使用退出码 `0`。警告不会单独导致校验失败。
 
 所有命令支持 `--help`，目录参数默认为当前目录。CLI 不要求交互输入，可用于本地脚本或 CI。
@@ -285,6 +287,8 @@ pnpm oqb export ../my-question-bank --format notion --out ./dist/my-question-ban
 4. 审阅题目内容及来源授权后更新审核状态，再运行 `--mode strict`。
 5. 发布前运行 `--mode release`，检查被筛除内容和引用问题，再运行 `oqb export <目录> --mode release --out ./dist` 生成数据包。
 6. 检查 `manifest.json` 中的统计和 SHA-256，再使用 Git 提交题库文件的变更，保留可追踪的审核记录。
+
+如果修改了已审核内容的题干、答案、解析、知识正文、共享材料、来源授权或关键引用，应先把审核状态改为 `pending`，并清除旧版本的 `reviewer`、`reviewedAt`；完成新一轮人工审核后再设为 `approved`。Core 只检查当前审核字段，不会比较内容与上次审核时的版本，因此需要在 Git 变更审阅中执行这一步。
 
 ## 常见问题
 

@@ -1,4 +1,5 @@
 import type { Diagnostic } from './diagnostics.js';
+import type { ValidationMode } from './publication-validator.js';
 import type { LocatedEntity, LocatedQuestionBank } from './types.js';
 
 interface QualityTextField {
@@ -9,8 +10,12 @@ interface QualityTextField {
 }
 
 /** 检查空白内容和完全重复的题干 */
-export function validateContentQuality(bank: LocatedQuestionBank, diagnostics: Diagnostic[]): void {
-  const requiredTextFields = collectRequiredTextFields(bank);
+export function validateContentQuality(
+  bank: LocatedQuestionBank,
+  diagnostics: Diagnostic[],
+  mode: ValidationMode,
+): void {
+  const requiredTextFields = collectRequiredTextFields(bank, mode);
   for (const field of requiredTextFields) {
     if (field.value.trim().length === 0) {
       diagnostics.push({
@@ -20,7 +25,7 @@ export function validateContentQuality(bank: LocatedQuestionBank, diagnostics: D
         file: field.file,
         entityId: field.entityId,
         fieldPath: field.fieldPath,
-        suggestion: '补充可读的题干、正文、标题或选项内容',
+        suggestion: '补充有效内容，不能只包含空白字符',
       });
     }
   }
@@ -48,10 +53,21 @@ export function validateContentQuality(bank: LocatedQuestionBank, diagnostics: D
   }
 }
 
-function collectRequiredTextFields(bank: LocatedQuestionBank): QualityTextField[] {
+function collectRequiredTextFields(
+  bank: LocatedQuestionBank,
+  mode: ValidationMode,
+): QualityTextField[] {
   const fields: QualityTextField[] = [];
-  if (bank.bank) {
-    addField(fields, bank.bank, 'name', bank.bank.value.name);
+  const bankEntity = bank.bank;
+  if (bankEntity) {
+    addField(fields, bankEntity, 'name', bankEntity.value.name);
+    // 发布模式会由授权校验报告许可证问题，避免同一空值产生重复诊断
+    if (mode === 'draft') {
+      addField(fields, bankEntity, 'license', bankEntity.value.license);
+    }
+    bankEntity.value.maintainers.forEach((maintainer, index) => {
+      addField(fields, bankEntity, `maintainers[${index}].name`, maintainer.name);
+    });
   }
   for (const topic of bank.topics) {
     addField(fields, topic, 'name', topic.value.name);
@@ -62,13 +78,29 @@ function collectRequiredTextFields(bank: LocatedQuestionBank): QualityTextField[
   }
   for (const question of bank.questions) {
     addField(fields, question, 'stem', question.value.stem);
+    addField(fields, question, 'difficulty', question.value.difficulty);
     if ('choices' in question.value) {
       question.value.choices.forEach((choice, index) => {
         addField(fields, question, `choices[${index}].text`, choice.text);
       });
     }
+    if (question.value.type === 'fill_blank') {
+      question.value.answer.blanks.forEach((blank, blankIndex) => {
+        blank.acceptedAnswers.forEach((answer, answerIndex) => {
+          addField(
+            fields,
+            question,
+            `answer.blanks[${blankIndex}].acceptedAnswers[${answerIndex}]`,
+            answer,
+          );
+        });
+      });
+    }
     if (question.value.type === 'short_answer') {
       addField(fields, question, 'answer.referenceAnswer', question.value.answer.referenceAnswer);
+      question.value.answer.rubric?.forEach((criterion, index) => {
+        addField(fields, question, `answer.rubric[${index}].description`, criterion.description);
+      });
     }
   }
   for (const group of bank.groups) {

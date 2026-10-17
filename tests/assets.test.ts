@@ -144,6 +144,26 @@ describe('Core 资源校验', () => {
     expect(result.valid).toBe(true);
     expect(result.diagnostics).toEqual([]);
   });
+
+  it('检查失配的转义反引号跨度中的实际资源链接', async () => {
+    await writeFile(
+      join(rootDir, 'knowledge/note.md'),
+      knowledgeMarkdown(
+        [],
+        String.fromCharCode(92) +
+          '``![缺失资源](assets/missing.svg)' +
+          String.fromCharCode(92) +
+          '`',
+      ),
+    );
+
+    const result = await validateQuestionBankDirectory(rootDir);
+    const codes = result.diagnostics.map(({ code }) => code);
+
+    expect(result.valid).toBe(false);
+    expect(codes).toContain('OQB-ASSET-002');
+    expect(codes).toContain('OQB-ASSET-003');
+  });
 });
 
 async function createBank(rootDir: string): Promise<void> {

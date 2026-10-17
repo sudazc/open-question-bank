@@ -301,6 +301,31 @@ describe('OpenQuestionBank CLI', () => {
     expect(stdout.join('\n')).toContain('Notion 导入包导出完成');
   });
 
+  it('支持以格式位置参数简写导出命令', async () => {
+    const bankDir = join(rootDir, 'bank');
+    await runCli(['init', bankDir], output);
+
+    for (const [formatAlias, outputName, entryFile] of [
+      ['github', 'github', 'README.md'],
+      ['obsidian', 'obsidian', '题库首页.md'],
+      ['notion', 'notion', 'README.md'],
+      ['json', 'json', 'question-bank.json'],
+    ] as const) {
+      const exportDir = join(rootDir, 'dist', outputName);
+      const exitCode = await runCli(['export', formatAlias, bankDir, '--out', exportDir], output);
+
+      expect(exitCode, `${formatAlias} 导出失败：${stderr.join('\n')}`).toBe(0);
+      await expect(readFile(join(exportDir, entryFile), 'utf8')).resolves.toBeTruthy();
+    }
+  });
+
+  it('拒绝同时使用格式位置参数和 --format', async () => {
+    const exitCode = await runCli(['export', 'notion', rootDir, '--format', 'json'], output);
+
+    expect(exitCode).toBe(2);
+    expect(stderr.join('\n')).toContain('格式位置参数与 --format 不能同时使用');
+  });
+
   it('校验失败时不生成导出文件', async () => {
     const bankDir = join(rootDir, 'bank');
     const exportDir = join(rootDir, 'dist');

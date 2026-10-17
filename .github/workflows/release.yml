@@ -48,6 +48,13 @@ jobs:
           pnpm oqb --help
           pnpm oqb init "$verify_root/sample-question-bank"
           pnpm oqb validate "$verify_root/sample-question-bank"
+          pnpm oqb export "$verify_root/sample-question-bank" --format obsidian --out "$verify_root/obsidian-vault"
+          test -f "$verify_root/obsidian-vault/题库首页.md"
+          test -f "$verify_root/obsidian-vault/manifest.json"
+          pnpm oqb export "$verify_root/sample-question-bank" --format notion --out "$verify_root/notion-import"
+          test -f "$verify_root/notion-import/databases/questions.csv"
+          test -f "$verify_root/notion-import/databases/answers.csv"
+          test -f "$verify_root/notion-import/manifest.json"
       - name: 创建 GitHub Release
         uses: softprops/action-gh-release@v2
         with:

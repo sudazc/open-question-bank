@@ -157,6 +157,7 @@ describe('OpenQuestionBank GitHub Markdown 导出器', () => {
           body: [
             '正文引用 [关联题目](oqb://question/question-single-choice)。',
             '![三角形](assets/triangle.svg?view=raw#preview)',
+            '\\`[转义边界](oqb://question/question-single-choice)\\`',
             '`oqb://question/question-single-choice`',
             '```text\noqb://knowledge/knowledge-foundations\n```',
           ].join('\n\n'),
@@ -175,6 +176,9 @@ describe('OpenQuestionBank GitHub Markdown 导出器', () => {
 
     expect(knowledgeContents).toContain('[关联题目](../questions/id-question-single-choice.md)');
     expect(knowledgeContents).toContain('![三角形](../assets/triangle.svg?view=raw#preview)');
+    expect(knowledgeContents).toContain(
+      '\\`[转义边界](../questions/id-question-single-choice.md)\\`',
+    );
     expect(knowledgeContents).toContain('`oqb://question/question-single-choice`');
     expect(knowledgeContents).toContain('```text\noqb://knowledge/knowledge-foundations\n```');
     expect(exported.files.some(({ path }) => path === 'topics/id-topic~3Aextended.md')).toBe(true);
@@ -276,6 +280,52 @@ describe('OpenQuestionBank GitHub Markdown 导出器', () => {
     expect(() => createQuestionBankGithubMarkdownExport(broken, assets)).toThrow(
       '导出引用目标不存在或类型不匹配',
     );
+  });
+
+  it('不会因转义反引号跨度误判而漏掉悬空的 Markdown 内部引用', () => {
+    const escapedRun =
+      String.fromCharCode(92) +
+      '``[失效](oqb://question/missing-question)' +
+      String.fromCharCode(92) +
+      '`';
+    const broken: QuestionBankData = {
+      ...data,
+      knowledge: [{ ...knowledge, body: escapedRun }],
+    };
+
+    expect(() => createQuestionBankGithubMarkdownExport(broken, assets)).toThrow(
+      '导出引用目标不存在或类型不匹配',
+    );
+  });
+
+  it('不会因无效代码围栏而漏掉悬空的 Markdown 内部引用', () => {
+    const broken: QuestionBankData = {
+      ...data,
+      knowledge: [
+        {
+          ...knowledge,
+          body: '```bad` info\n[失效](oqb://question/missing-question)',
+        },
+      ],
+    };
+
+    expect(() => createQuestionBankGithubMarkdownExport(broken, assets)).toThrow(
+      '导出引用目标不存在或类型不匹配',
+    );
+  });
+
+  it('忽略允许包含反引号的信息字符串的波浪号围栏内部引用', () => {
+    const fenced: QuestionBankData = {
+      ...data,
+      knowledge: [
+        {
+          ...knowledge,
+          body: '~~~bad` info\n[失效](oqb://question/missing-question)\n~~~',
+        },
+      ],
+    };
+
+    expect(() => createQuestionBankGithubMarkdownExport(fenced, assets)).not.toThrow();
   });
 });
 
