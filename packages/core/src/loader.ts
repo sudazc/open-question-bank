@@ -1,4 +1,5 @@
-import { lstat, readFile, readdir, realpath } from 'node:fs/promises';
+import type { Dirent } from 'node:fs';
+import { lstat, opendir, readFile, realpath } from 'node:fs/promises';
 import { isAbsolute, relative, resolve, sep, win32 } from 'node:path';
 import { TextDecoder } from 'node:util';
 import { validateAssetReferences } from './asset-validator.js';
@@ -37,6 +38,14 @@ export interface LoadOptions {
   maxFileBytes?: number;
   maxTotalBytes?: number;
   maxEntityFiles?: number;
+  /** 最多扫描的实体目录条目数量 */
+  maxScannedEntries?: number;
+}
+
+interface DirectoryScanBudget {
+  maxEntries: number;
+  scannedEntries: number;
+  exceeded: boolean;
 }
 
 /** 读取 bank.yaml 指定的 YAML 实体文件与 Markdown 知识笔记 */
@@ -57,6 +66,7 @@ export async function loadQuestionBank(
   const maxFileBytes = options.maxFileBytes ?? 2_097_152;
   const maxTotalBytes = options.maxTotalBytes ?? 67_108_864;
   const maxEntityFiles = options.maxEntityFiles ?? 10_000;
+  const maxScannedEntries = options.maxScannedEntries ?? 50_000;
   if (!Number.isSafeInteger(maxFileBytes) || maxFileBytes < 1) {
     result.diagnostics.push({
       code: 'OQB-FILE-011',
@@ -80,6 +90,15 @@ export async function loadQuestionBank(
       code: 'OQB-FILE-017',
       severity: 'fatal',
       message: 'maxTotalBytes 必须是正安全整数',
+      file: '.',
+    });
+    return result;
+  }
+  if (!Number.isSafeInteger(maxScannedEntries) || maxScannedEntries < 0) {
+    result.diagnostics.push({
+      code: 'OQB-FILE-018',
+      severity: 'fatal',
+      message: 'maxScannedEntries 必须是非负安全整数',
       file: '.',
     });
     return result;
@@ -144,6 +163,11 @@ export async function loadQuestionBank(
     result.diagnostics,
   );
   let entityCount = 0;
+  const scanBudget: DirectoryScanBudget = {
+    maxEntries: maxScannedEntries,
+    scannedEntries: 0,
+    exceeded: false,
+  };
   for (const collection of Object.keys(collections) as CollectionName[]) {
     const relativeDirectory = collections[collection];
     const directoryPath = resolveBankRelativePath(absoluteRoot, relativeDirectory);
@@ -166,7 +190,11 @@ export async function loadQuestionBank(
       collection,
       result.diagnostics,
       maxEntityFiles - entityCount,
+      scanBudget,
     );
+    if (scanBudget.exceeded) {
+      break;
+    }
     entityCount += files.length;
     if (result.diagnostics.some(({ code }) => code === 'OQB-FILE-006')) {
       break;
@@ -222,6 +250,7 @@ async function discoverFiles(
   collection: CollectionName,
   diagnostics: Diagnostic[],
   remainingFiles: number,
+  scanBudget: DirectoryScanBudget,
 ): Promise<DiscoveredFile[]> {
   const files: DiscoveredFile[] = [];
   const expectedExtensions = supportedExtensions[collection];
@@ -241,7 +270,7 @@ async function discoverFiles(
       return;
     }
 
-    let entries;
+    let entries: Dirent[];
     try {
       const metadata = await lstat(currentPath);
       if (metadata.isSymbolicLink()) {
@@ -253,7 +282,23 @@ async function discoverFiles(
         diagnostics.push(unsafePathDiagnostic(displayRoot, currentPath));
         return;
       }
-      entries = await readdir(currentPath, { withFileTypes: true });
+      entries = [];
+      const directory = await opendir(currentPath);
+      for await (const entry of directory) {
+        if (scanBudget.scannedEntries >= scanBudget.maxEntries) {
+          diagnostics.push({
+            code: 'OQB-FILE-019',
+            severity: 'fatal',
+            message: '题库实体目录扫描条目数超过 maxScannedEntries 限制',
+            file: toDisplayPath(displayRoot, currentPath),
+            suggestion: '移除目录中的无关文件，或显式提高 maxScannedEntries 限制',
+          });
+          scanBudget.exceeded = true;
+          break;
+        }
+        scanBudget.scannedEntries += 1;
+        entries.push(entry);
+      }
     } catch (error) {
       if (isMissingPath(error)) {
         if (depth === 0) {
@@ -276,9 +321,13 @@ async function discoverFiles(
       return;
     }
 
+    if (scanBudget.exceeded) {
+      return;
+    }
+
     entries.sort((left, right) => (left.name < right.name ? -1 : left.name > right.name ? 1 : 0));
     for (const entry of entries) {
-      if (limitReached) {
+      if (limitReached || scanBudget.exceeded) {
         break;
       }
       const fullPath = resolve(currentPath, entry.name);

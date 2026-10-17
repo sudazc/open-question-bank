@@ -938,6 +938,28 @@ describe('OpenQuestionBank Core', () => {
     expect(result.valid).toBe(false);
     expect(result.diagnostics.map(({ code }) => code)).toContain('OQB-FILE-017');
   });
+
+  it('限制扫描的目录条目数量，包括不参与解析的文件', async () => {
+    await writeFile(join(rootDir, 'topics/unrelated.txt'), 'ignored');
+
+    const result = await validateQuestionBankDirectory(rootDir, { maxScannedEntries: 1 });
+
+    expect(result.valid).toBe(false);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'OQB-FILE-019',
+        severity: 'fatal',
+        file: 'topics',
+      }),
+    );
+  });
+
+  it('拒绝无效的目录扫描条目限制', async () => {
+    const result = await validateQuestionBankDirectory(rootDir, { maxScannedEntries: -1 });
+
+    expect(result.valid).toBe(false);
+    expect(result.diagnostics.map(({ code }) => code)).toContain('OQB-FILE-018');
+  });
 });
 
 async function writeQuestionBank(rootDir: string): Promise<void> {
