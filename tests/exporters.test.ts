@@ -586,6 +586,41 @@ describe('OpenQuestionBank Notion 导入包导出器', () => {
     expect(questionContents).not.toContain('这段解析也必须保持隐藏。');
   });
 
+  it('题干中的内部答案标记不会隐藏后续题目内容', () => {
+    const question = data.questions.find(({ id }) => id === 'question-single-choice');
+    if (!question || !('choices' in question)) {
+      throw new Error('测试题库缺少单选题');
+    }
+    const firstChoice = question.choices[0];
+    if (!firstChoice) {
+      throw new Error('单选题必须包含选项');
+    }
+
+    const markers = getQuestionAnswerSectionMarkers(question.id);
+    const stem = ['题干开头。', markers.start, '## 答案', '这段文字仍属于题干。'].join('\n\n');
+    const questionData: QuestionBankData = {
+      ...data,
+      questions: data.questions.map((item) => (item.id === question.id ? { ...item, stem } : item)),
+    };
+    const obsidianPage = createQuestionBankObsidianVaultExport(questionData, assets).files.find(
+      ({ contents }) => contents.includes(`题库ID: "${question.id}"`),
+    )?.contents;
+    const notionPage = createQuestionBankNotionExport(questionData, assets).files.find(
+      ({ path }) => path === 'questions/id-question-single-choice.md',
+    )?.contents;
+    const foldedAnswerIndex = obsidianPage?.indexOf('> [!question]- 显示答案与解析') ?? -1;
+    const choiceIndex = obsidianPage?.indexOf(firstChoice.text) ?? -1;
+    const injectedTextIndex = obsidianPage?.indexOf('这段文字仍属于题干。') ?? -1;
+
+    expect(choiceIndex).toBeGreaterThanOrEqual(0);
+    expect(injectedTextIndex).toBeGreaterThanOrEqual(0);
+    expect(foldedAnswerIndex).toBeGreaterThanOrEqual(0);
+    expect(choiceIndex).toBeLessThan(foldedAnswerIndex);
+    expect(injectedTextIndex).toBeLessThan(foldedAnswerIndex);
+    expect(notionPage).toContain(firstChoice.text);
+    expect(notionPage).toContain('这段文字仍属于题干。');
+  });
+
   it('解析代码块中的答案标记不会使后续答案内容泄漏到练习页面', () => {
     const question = data.questions.find(({ id }) => id === 'question-single-choice');
     if (!question) {

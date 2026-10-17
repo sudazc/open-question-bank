@@ -304,12 +304,20 @@ function renderQuestionFiles(
   return questions.map((question) => {
     const path = entityFilePath('question', question.id);
     const answerMarkers = getQuestionAnswerSectionMarkers(question.id);
+    const stem = neutralizeUserAnswerSectionMarkers(
+      rewriteMarkdown(question.stem, path, assets, targets),
+      answerMarkers,
+    );
+    const explanation = question.explanation
+      ? neutralizeUserAnswerSectionMarkers(
+          rewriteMarkdown(question.explanation, path, assets, targets),
+          answerMarkers,
+        )
+      : undefined;
     const answerSection = [
       answerMarkers.start,
       `## 答案\n\n${renderQuestionAnswer(question)}`,
-      ...(question.explanation
-        ? [`## 解析\n\n${rewriteMarkdown(question.explanation, path, assets, targets)}`]
-        : []),
+      ...(explanation ? [`## 解析\n\n${explanation}`] : []),
       answerMarkers.end,
     ].join('\n\n');
     const sections = [
@@ -318,7 +326,7 @@ function renderQuestionFiles(
         question.id,
         `${question.type} · ${question.difficulty} · ${question.score} 分`,
       ),
-      `## 题干\n\n${rewriteMarkdown(question.stem, path, assets, targets)}`,
+      `## 题干\n\n${stem}`,
       renderQuestionChoices(question),
       answerSection,
       renderEntityLinks('所属考点', question.topicIds, 'topic', path, targets),
@@ -710,6 +718,30 @@ function findMarkerLine(
       : markdown.indexOf(marker, index + marker.length);
   }
   return undefined;
+}
+
+function neutralizeUserAnswerSectionMarkers(
+  markdown: string,
+  markers: { start: string; end: string },
+): string {
+  const searchableMarkdown = maskMarkdownCode(markdown);
+  const matches: Array<{ index: number; marker: string }> = [];
+  for (const marker of [markers.start, markers.end]) {
+    let startIndex = 0;
+    let index = findMarkerLine(searchableMarkdown, marker, startIndex);
+    while (index !== undefined) {
+      matches.push({ index, marker });
+      startIndex = index + marker.length;
+      index = findMarkerLine(searchableMarkdown, marker, startIndex);
+    }
+  }
+
+  let result = markdown;
+  for (const { index, marker } of matches.sort((left, right) => right.index - left.index)) {
+    const inertMarker = marker.replace('oqb:question-answer:', 'oqb:user-question-answer:');
+    result = result.slice(0, index) + inertMarker + result.slice(index + marker.length);
+  }
+  return result;
 }
 
 function entityFilename(id: string): string {
