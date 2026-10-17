@@ -32,9 +32,16 @@ describe('OpenQuestionBank CLI', () => {
 
     const exitCode = await runCli(['init', bankDir], output);
     const result = await validateQuestionBankDirectory(bankDir);
+    const releaseResult = await validateQuestionBankDirectory(bankDir, { mode: 'release' });
+    const bankContents = await readFile(join(bankDir, 'bank.yaml'), 'utf8');
 
     expect(exitCode).toBe(0);
     expect(result.valid).toBe(true);
+    expect(bankContents).toContain("license: 'TBD - not for publication'");
+    expect(releaseResult.valid).toBe(false);
+    expect(releaseResult.diagnostics).toContainEqual(
+      expect.objectContaining({ code: 'OQB-LICENSE-004', fieldPath: 'license' }),
+    );
     expect(result.data.topics).toHaveLength(1);
     expect(result.data.knowledge).toHaveLength(1);
     expect(result.data.questions).toHaveLength(1);
