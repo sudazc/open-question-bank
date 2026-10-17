@@ -119,6 +119,26 @@ describe('Core 资源校验', () => {
     );
   });
 
+  it('共享 SVG 的安全诊断关联到每个引用实体', async () => {
+    await writeFile(
+      join(rootDir, 'knowledge/note.md'),
+      knowledgeMarkdown(['assets/shared.svg'], '![图](assets/shared.svg)'),
+    );
+    await writeFile(
+      join(rootDir, 'questions/question.yaml'),
+      questionYaml('![图](assets/shared.svg)', ['assets/shared.svg']),
+    );
+    await writeFile(join(rootDir, 'assets/shared.svg'), '<svg onload="alert(1)"/>');
+
+    const result = await validateQuestionBankDirectory(rootDir);
+    const diagnostics = result.diagnostics.filter(({ code }) => code === 'OQB-SECURITY-003');
+
+    expect(diagnostics.map(({ entityId }) => entityId).sort()).toEqual([
+      'knowledge-asset',
+      'question-asset',
+    ]);
+  });
+
   it('在创建输出目录前拒绝跨平台重名路径', async () => {
     const outputDir = join(rootDir, 'portable-collision-output');
 

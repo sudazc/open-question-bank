@@ -20,6 +20,11 @@ interface AssetPathEntry {
   file: string;
 }
 
+interface AssetInspection {
+  status: 'valid' | 'missing' | 'unsafe' | 'unavailable';
+  svgIssue?: string;
+}
+
 /** 检查实体资源清单、Markdown 链接与资源文件是否一致 */
 export async function validateAssetReferences(
   canonicalRoot: string,
@@ -31,6 +36,7 @@ export async function validateAssetReferences(
   if (!assetsDirectory) {
     return;
   }
+  const inspections = new Map<string, Promise<AssetInspection>>();
 
   const entities = [
     ...collections.knowledge.map((entity) => ({
@@ -147,25 +153,27 @@ export async function validateAssetReferences(
         continue;
       }
       checkedPaths.add(path);
-      const result = await inspectAssetFile(canonicalRoot, path);
-      if (result === 'valid') {
-        if (path.toLowerCase().endsWith('.svg')) {
-          const svgIssue = await inspectSvgContent(canonicalRoot, path);
-          if (svgIssue) {
-            addAssetDiagnostic(
-              diagnostics,
-              entry.file,
-              entry.entityId,
-              'OQB-SECURITY-003',
-              svgIssue,
-              entry.fieldPath,
-              '移除 SVG 中的脚本、事件、外部引用、样式和实体声明，保留静态路径与图形元素',
-            );
-          }
+      let inspection = inspections.get(path);
+      if (!inspection) {
+        inspection = inspectAsset(canonicalRoot, path);
+        inspections.set(path, inspection);
+      }
+      const { status, svgIssue } = await inspection;
+      if (status === 'valid') {
+        if (svgIssue) {
+          addAssetDiagnostic(
+            diagnostics,
+            entry.file,
+            entry.entityId,
+            'OQB-SECURITY-003',
+            svgIssue,
+            entry.fieldPath,
+            '移除 SVG 中的脚本、事件、外部引用、样式和实体声明，保留静态路径与图形元素',
+          );
         }
         continue;
       }
-      const unsafe = result === 'unsafe';
+      const unsafe = status === 'unsafe';
       addAssetDiagnostic(
         diagnostics,
         entry.file,
@@ -179,6 +187,15 @@ export async function validateAssetReferences(
       );
     }
   }
+}
+
+async function inspectAsset(canonicalRoot: string, path: string): Promise<AssetInspection> {
+  const status = await inspectAssetFile(canonicalRoot, path);
+  if (status !== 'valid' || !path.toLowerCase().endsWith('.svg')) {
+    return { status };
+  }
+  const svgIssue = await inspectSvgContent(canonicalRoot, path);
+  return svgIssue === undefined ? { status } : { status, svgIssue };
 }
 
 function normalizeDirectoryPath(value: string): string | undefined {
