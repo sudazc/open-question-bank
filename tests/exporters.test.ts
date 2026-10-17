@@ -7,6 +7,7 @@ import {
   createQuestionBankNotionExport,
   createQuestionBankObsidianVaultExport,
 } from '../packages/exporters/src/index.js';
+import { getQuestionAnswerSectionMarkers } from '../packages/exporters/src/github-markdown.js';
 import { bank, exams, knowledge, questions, questionGroup, topic } from './fixtures.js';
 
 const data: QuestionBankData = {
@@ -583,6 +584,33 @@ describe('OpenQuestionBank Notion 导入包导出器', () => {
     expect(questionContents).not.toContain('这是答案解析的开头。');
     expect(questionContents).not.toContain('这是解析中的同名标题内容。');
     expect(questionContents).not.toContain('这段解析也必须保持隐藏。');
+  });
+
+  it('解析代码块中的答案标记不会使后续答案内容泄漏到练习页面', () => {
+    const question = data.questions.find(({ id }) => id === 'question-single-choice');
+    if (!question) {
+      throw new Error('测试题库缺少单选题');
+    }
+    const markers = getQuestionAnswerSectionMarkers(question.id);
+    const explanation = ['解析开头。', '```md', markers.end, '```', '后续解析必须保持隐藏。'].join(
+      '\n',
+    );
+    const questionData: QuestionBankData = {
+      ...data,
+      questions: data.questions.map((item) =>
+        item.id === question.id ? { ...item, explanation } : item,
+      ),
+    };
+    const obsidianPage = createQuestionBankObsidianVaultExport(questionData, assets).files.find(
+      ({ contents }) => contents.includes(`题库ID: "${question.id}"`),
+    )?.contents;
+    const notionPage = createQuestionBankNotionExport(questionData, assets).files.find(
+      ({ path }) => path === 'questions/id-question-single-choice.md',
+    )?.contents;
+
+    expect(obsidianPage).toContain('> 后续解析必须保持隐藏。');
+    expect(obsidianPage).not.toContain('\n后续解析必须保持隐藏。');
+    expect(notionPage).not.toContain('后续解析必须保持隐藏。');
   });
 
   it('对实体输入顺序变化保持相同输出', () => {

@@ -7,7 +7,7 @@ import {
 } from './export-common.js';
 import {
   createQuestionBankGithubMarkdownExport,
-  getQuestionAnswerSectionMarkers,
+  findQuestionAnswerSection,
   getQuestionBankGithubMarkdownEntityFilePath,
   getQuestionBankGithubMarkdownFilePaths,
 } from './github-markdown.js';
@@ -477,16 +477,13 @@ function prepareNotionQuestionPage(
 }
 
 function omitQuestionAnswer(markdown: string, questionId: string): string {
-  const markers = getQuestionAnswerSectionMarkers(questionId);
-  const start = markdown.indexOf(markers.start);
-  const contentStart = start + markers.start.length;
-  const end = start < 0 ? -1 : markdown.indexOf(markers.end, contentStart);
-  if (start < 0 || end < 0) {
+  const section = findQuestionAnswerSection(markdown, questionId);
+  if (!section) {
     throw new Error(`无法定位题目 ${questionId} 的答案区域，已取消 Notion 导出`);
   }
 
-  const before = markdown.slice(0, start).trimEnd();
-  const after = markdown.slice(end + markers.end.length).trimStart();
+  const before = markdown.slice(0, section.start).trimEnd();
+  const after = markdown.slice(section.contentEnd).trimStart();
   const reminder = '## 答案与解析\n\n练习后可在单独的“答案与解析”数据库中按稳定 ID 查询。';
   return before + '\n\n' + reminder + (after ? '\n\n' + after : '');
 }

@@ -7,9 +7,9 @@ import { assertUniquePortableExportPaths, type ExportAsset } from './export-comm
 import type { ExportFile } from './export-writer.js';
 import {
   createQuestionBankGithubMarkdownExport,
+  findQuestionAnswerSection,
   getQuestionBankGithubMarkdownEntityFilePath,
   getQuestionBankGithubMarkdownFilePaths,
-  getQuestionAnswerSectionMarkers,
 } from './github-markdown.js';
 
 const format = 'openquestionbank-obsidian-vault';
@@ -449,22 +449,19 @@ function neutralizeChoiceMarkers(markdown: string): string {
 }
 
 function collapseQuestionAnswer(markdown: string, questionId: string): string {
-  const markers = getQuestionAnswerSectionMarkers(questionId);
-  const start = markdown.indexOf(markers.start);
-  const contentStart = start + markers.start.length;
-  const end = start < 0 ? -1 : markdown.indexOf(markers.end, contentStart);
-  if (start < 0 || end < 0) {
+  const section = findQuestionAnswerSection(markdown, questionId);
+  if (!section) {
     throw new Error(`无法定位题目 ${questionId} 的答案区域，已取消 Obsidian 导出`);
   }
 
-  const answerSection = markdown.slice(contentStart, end).trim();
+  const answerSection = markdown.slice(section.contentStart, section.end).trim();
   const details = answerSection.replace(/^## 答案[ \t]*\r?\n+/, '').trim();
   const folded = [
     '> [!question]- 显示答案与解析',
     ...details.split('\n').map((line) => (line ? '> ' + line : '>')),
   ].join('\n');
-  const before = markdown.slice(0, start).trimEnd();
-  const after = markdown.slice(end + markers.end.length).trimStart();
+  const before = markdown.slice(0, section.start).trimEnd();
+  const after = markdown.slice(section.contentEnd).trimStart();
   return before + '\n\n' + folded + (after ? '\n\n' + after : '');
 }
 

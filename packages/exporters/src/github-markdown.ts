@@ -661,6 +661,57 @@ export function getQuestionAnswerSectionMarkers(questionId: string): {
   };
 }
 
+/** 定位答案区域并忽略 Markdown 代码中的同名标记 */
+export function findQuestionAnswerSection(
+  markdown: string,
+  questionId: string,
+): { start: number; contentStart: number; end: number; contentEnd: number } | undefined {
+  const markers = getQuestionAnswerSectionMarkers(questionId);
+  const searchableMarkdown = maskMarkdownCode(markdown);
+  let start = findMarkerLine(searchableMarkdown, markers.start, 0);
+  while (start !== undefined) {
+    const contentStart = start + markers.start.length;
+    if (searchableMarkdown.startsWith('\n\n## 答案\n\n', contentStart)) {
+      const end = findMarkerLine(searchableMarkdown, markers.end, contentStart, true);
+      if (end !== undefined) {
+        return {
+          start,
+          contentStart,
+          end,
+          contentEnd: end + markers.end.length,
+        };
+      }
+      return undefined;
+    }
+    start = findMarkerLine(searchableMarkdown, markers.start, start + markers.start.length);
+  }
+  return undefined;
+}
+
+function findMarkerLine(
+  markdown: string,
+  marker: string,
+  startIndex: number,
+  fromEnd = false,
+): number | undefined {
+  let index = fromEnd ? markdown.lastIndexOf(marker) : markdown.indexOf(marker, startIndex);
+  while (index >= startIndex) {
+    const isLineStart = index === 0 || markdown[index - 1] === '\n';
+    const afterMarker = index + marker.length;
+    const isLineEnd =
+      afterMarker === markdown.length ||
+      markdown[afterMarker] === '\n' ||
+      markdown[afterMarker] === '\r';
+    if (isLineStart && isLineEnd) {
+      return index;
+    }
+    index = fromEnd
+      ? markdown.lastIndexOf(marker, index - 1)
+      : markdown.indexOf(marker, index + marker.length);
+  }
+  return undefined;
+}
+
 function entityFilename(id: string): string {
   const encodedId = [...id]
     .map((character) =>
