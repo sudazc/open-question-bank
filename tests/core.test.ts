@@ -679,6 +679,43 @@ describe('OpenQuestionBank Core', () => {
     );
   });
 
+  it('对仅含空白的可选说明字段发出非阻断警告', async () => {
+    const bankPath = join(rootDir, 'bank.yaml');
+    const bank = await readFile(bankPath, 'utf8');
+    await writeFile(
+      bankPath,
+      bank.replace('license: CC-BY-4.0', 'license: CC-BY-4.0\ndescription: "  "'),
+    );
+
+    const topicPath = join(rootDir, 'topics/root.yaml');
+    const topic = await readFile(topicPath, 'utf8');
+    await writeFile(topicPath, topic.replace('order: 0', 'order: 0\ndescription: "  "'));
+
+    const notePath = join(rootDir, 'knowledge/one.md');
+    const note = await readFile(notePath, 'utf8');
+    await writeFile(
+      notePath,
+      note.replace('title: k-one 知识', 'title: k-one 知识\nsummary: "  "'),
+    );
+
+    const questionPath = join(rootDir, 'questions/one.yaml');
+    const question = await readFile(questionPath, 'utf8');
+    await writeFile(
+      questionPath,
+      question.replace('answer: true', 'answer: true\nexplanation: "  "'),
+    );
+
+    const result = await validateQuestionBankDirectory(rootDir);
+
+    expect(result.valid).toBe(true);
+    expect(result.diagnostics.filter(({ code }) => code === 'OQB-QUALITY-004')).toMatchObject([
+      { severity: 'warning', entityId: 'sample-bank', fieldPath: 'description' },
+      { severity: 'warning', entityId: 'topic-root', fieldPath: 'description' },
+      { severity: 'warning', entityId: 'k-one', fieldPath: 'summary' },
+      { severity: 'warning', entityId: 'q-one', fieldPath: 'explanation' },
+    ]);
+  });
+
   it('报告规范化后重复的选择题选项', async () => {
     await writeFile(
       join(rootDir, 'questions/choices.yaml'),

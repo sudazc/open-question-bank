@@ -9,7 +9,7 @@ interface QualityTextField {
   fieldPath: string;
 }
 
-/** 检查空白内容和完全重复的题干 */
+/** 检查空白文本、重复题干和重复选项 */
 export function validateContentQuality(
   bank: LocatedQuestionBank,
   diagnostics: Diagnostic[],
@@ -26,6 +26,20 @@ export function validateContentQuality(
         entityId: field.entityId,
         fieldPath: field.fieldPath,
         suggestion: '补充有效内容，不能只包含空白字符',
+      });
+    }
+  }
+
+  for (const field of collectOptionalTextFields(bank)) {
+    if (field.value.trim().length === 0) {
+      diagnostics.push({
+        code: 'OQB-QUALITY-004',
+        severity: 'warning',
+        message: '可选文本字段只包含空白字符',
+        file: field.file,
+        entityId: field.entityId,
+        fieldPath: field.fieldPath,
+        suggestion: '无内容时移除该字段，或补充有效文本',
       });
     }
   }
@@ -132,6 +146,34 @@ function collectRequiredTextFields(
   }
   for (const exam of bank.exams) {
     addField(fields, exam, 'title', exam.value.title);
+  }
+  return fields;
+}
+
+function collectOptionalTextFields(bank: LocatedQuestionBank): QualityTextField[] {
+  const fields: QualityTextField[] = [];
+  if (bank.bank?.value.description !== undefined) {
+    addField(fields, bank.bank, 'description', bank.bank.value.description);
+  }
+  for (const topic of bank.topics) {
+    if (topic.value.description !== undefined) {
+      addField(fields, topic, 'description', topic.value.description);
+    }
+  }
+  for (const note of bank.knowledge) {
+    if (note.value.summary !== undefined) {
+      addField(fields, note, 'summary', note.value.summary);
+    }
+  }
+  for (const question of bank.questions) {
+    if (question.value.explanation !== undefined) {
+      addField(fields, question, 'explanation', question.value.explanation);
+    }
+  }
+  for (const exam of bank.exams) {
+    if (exam.value.description !== undefined) {
+      addField(fields, exam, 'description', exam.value.description);
+    }
   }
   return fields;
 }
