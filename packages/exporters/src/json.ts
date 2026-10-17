@@ -1,7 +1,11 @@
 import { createHash } from 'node:crypto';
 import type { Bank } from '@openquestionbank/schema';
 import type { QuestionBankData } from '@openquestionbank/core';
-import { normalizeExportAssets, type ExportAsset } from './export-common.js';
+import {
+  assertUniquePortableExportPaths,
+  normalizeExportAssets,
+  type ExportAsset,
+} from './export-common.js';
 
 const format = 'openquestionbank-json';
 const formatVersion = '1.0.0';
@@ -107,9 +111,15 @@ export function createQuestionBankJsonExport(
     ].sort((left, right) => compareStrings(left.path, right.path)),
   };
 
+  const files = [...dataFiles, { path: 'manifest.json', contents: stableJson(manifest) }];
+  assertUniquePortableExportPaths([
+    ...files.map(({ path }) => path),
+    ...normalizedAssets.map(({ path }) => path),
+  ]);
+
   return {
     manifest,
-    files: [...dataFiles, { path: 'manifest.json', contents: stableJson(manifest) }],
+    files,
     assets: normalizedAssets,
   };
 }

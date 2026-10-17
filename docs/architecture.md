@@ -9,7 +9,7 @@ schema → core → cli
 ```
 
 - `schema` 定义与展示平台无关的数据合同、JSON Schema 和 TypeScript 类型，不负责读文件或扫描题库。
-- `core` 负责 `bank.yaml` 和实体文件发现、YAML 与 Markdown Front Matter 解析、结构及语义校验、实体关联、索引、资源完整性、审核授权校验和确定性规则组卷。
+- `core` 负责 `bank.yaml` 和实体文件发现、YAML 与 Markdown Front Matter 解析、结构及语义校验、实体关联、索引、资源完整性、审核授权校验、确定性规则组卷和按标准答案评估客观题作答。
 - `cli` 负责 `oqb` 命令、参数解析、题库初始化、校验、统计、诊断、构建、JSON / GitHub Markdown / Obsidian / Notion 导出和终端反馈。
 - `exporters` 从 `core` 的统一内部数据模型生成标准 JSON 数据包、GitHub Markdown 阅读包、Obsidian Vault 和 Notion CSV / Markdown 导入包。
 
@@ -32,6 +32,6 @@ JSON Schema 不执行题库内容中的代码。Core 将实体文件限制为 UT
 
 ## 当前交付边界
 
-当前阶段包含 Workspace 配置、工程规范、Schema 1.0、TypeScript 类型、Core 读取 / 校验 / 规则组卷 API、CLI 初始化 / 校验 / 统计 / 诊断 / 构建、JSON / GitHub Markdown / Obsidian / Notion 导出命令、中文使用指南、跨平台 GitHub Actions CI 和按版本标签生成的 GitHub Release 构建包。自动评分、完整内容质量规则及在线学习仍待后续实现。
+当前阶段包含 Workspace 配置、工程规范、Schema 1.0、TypeScript 类型、Core 读取 / 校验 / 规则组卷 / 客观题评分 API、CLI 初始化 / 校验 / 统计 / 诊断 / 构建、JSON / GitHub Markdown / Obsidian / Notion 导出命令、中文使用指南、跨平台 GitHub Actions CI 和按版本标签生成的 GitHub Release 构建包。完整内容质量规则、简答题自动语义评分及在线学习仍待后续实现。
 
 JSON、GitHub Markdown、Obsidian Vault 与 Notion 导入包的文件合同、版本、清单和可复现规则分别见 [标准 JSON 导出说明](export-json.md)、[GitHub Markdown 导出说明](export-github-markdown.md)、[Obsidian Vault 导出说明](export-obsidian-vault.md) 和 [Notion 导入说明](export-notion-import.md)。

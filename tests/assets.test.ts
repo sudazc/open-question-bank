@@ -1,8 +1,10 @@
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { validateQuestionBankDirectory } from '../packages/core/src/index.js';
+import { prepareExportDirectory } from '../packages/exporters/src/export-writer.js';
+import { bank } from './fixtures.js';
 
 describe('Core 资源校验', () => {
   let rootDir: string;
@@ -111,6 +113,15 @@ describe('Core 资源校验', () => {
         entityId: 'knowledge-asset',
       }),
     );
+  });
+
+  it('在创建输出目录前拒绝跨平台重名路径', async () => {
+    const outputDir = join(rootDir, 'portable-collision-output');
+
+    await expect(
+      prepareExportDirectory(rootDir, outputDir, bank, ['topics/Name.md', 'topics/name.md']),
+    ).rejects.toThrow('大小写或 Unicode 规范化不敏感');
+    expect(await readdir(rootDir)).not.toContain('portable-collision-output');
   });
 
   it('忽略外部链接和代码片段中的示例链接', async () => {

@@ -96,6 +96,53 @@ describe('OpenQuestionBank JSON 导出器', () => {
         { path: '../outside.svg', sizeBytes: 0, sha256: '0'.repeat(64) },
       ]),
     ).toThrow('资源路径不安全');
+    expect(() =>
+      createQuestionBankJsonExport(data, [
+        { path: 'assets/Photo.png', sizeBytes: 1, sha256: '0'.repeat(64) },
+        { path: 'assets/photo.png', sizeBytes: 1, sha256: '1'.repeat(64) },
+      ]),
+    ).toThrow('大小写或 Unicode 规范化不敏感');
+    expect(() =>
+      createQuestionBankJsonExport(data, [
+        { path: 'assets/é.svg', sizeBytes: 1, sha256: '0'.repeat(64) },
+        { path: 'assets/e\u0301.svg', sizeBytes: 1, sha256: '1'.repeat(64) },
+      ]),
+    ).toThrow('大小写或 Unicode 规范化不敏感');
+  });
+});
+
+describe('跨平台导出文件名', () => {
+  it('拒绝 Windows 非法文件名、保留设备名和超长路径段', () => {
+    for (const path of [
+      'assets/CON.svg',
+      'assets/image?.svg',
+      'assets/image:preview.svg',
+      'assets/control\u0001.svg',
+      `assets/${'é'.repeat(128)}.svg`,
+    ]) {
+      expect(() =>
+        createQuestionBankJsonExport(data, [{ path, sizeBytes: 1, sha256: '0'.repeat(64) }]),
+      ).toThrow('不安全');
+    }
+  });
+
+  it('拒绝资源文件与导出文件之间的文件或目录冲突', () => {
+    const assetPath = 'manifest.json/diagram.svg';
+    const conflictingData: QuestionBankData = {
+      ...data,
+      knowledge: data.knowledge.map((entity) => ({ ...entity, assets: [assetPath] })),
+    };
+    const conflictingAssets = [{ path: assetPath, sizeBytes: 1, sha256: '0'.repeat(64) }];
+    const exporters = [
+      () => createQuestionBankJsonExport(conflictingData, conflictingAssets),
+      () => createQuestionBankGithubMarkdownExport(conflictingData, conflictingAssets),
+      () => createQuestionBankObsidianVaultExport(conflictingData, conflictingAssets),
+      () => createQuestionBankNotionExport(conflictingData, conflictingAssets),
+    ];
+
+    for (const createExport of exporters) {
+      expect(createExport).toThrow('文件与目录冲突');
+    }
   });
 });
 
@@ -142,7 +189,7 @@ describe('OpenQuestionBank GitHub Markdown 导出器', () => {
     ).toContain('说明主要概念（1 分）');
     expect(exported.manifest).toMatchObject({
       format: 'openquestionbank-github-markdown',
-      formatVersion: '1.0.0',
+      formatVersion: '1.1.0',
       schemaVersion: '1.0.0',
       bank: { id: bank.id, name: bank.name, version: bank.version },
       statistics: {
@@ -188,11 +235,36 @@ describe('OpenQuestionBank GitHub Markdown 导出器', () => {
       },
       assets,
     );
-    const longIdPath = exported.files.find(({ path }) => path.includes('~b64~'))?.path;
+    const longIdPath = exported.files.find(({ path }) => path.includes('~x~'))?.path;
 
-    expect(exported.files.some(({ path }) => path === 'topics/id-CON.md')).toBe(true);
+    expect(exported.files.some(({ path }) => path === 'topics/id-~43~4F~4E.md')).toBe(true);
     expect(longIdPath).toBeDefined();
     expect(longIdPath?.split('/').at(-1)?.length).toBeLessThan(255);
+  });
+
+  it('为仅大小写不同的稳定 ID 生成跨平台不冲突的导出路径', () => {
+    const collidingIds: QuestionBankData = {
+      ...data,
+      topics: [
+        ...data.topics,
+        { ...topic, id: 'TopicA', name: '大写 ID' },
+        { ...topic, id: 'topica', name: '小写 ID' },
+      ],
+    };
+    const exports = [
+      createQuestionBankGithubMarkdownExport(collidingIds, assets),
+      createQuestionBankObsidianVaultExport(collidingIds, assets),
+      createQuestionBankNotionExport(collidingIds, assets),
+    ];
+
+    expect(exports[0]?.files.map(({ path }) => path)).toContain('topics/id-~54opic~41.md');
+    expect(exports[0]?.files.map(({ path }) => path)).toContain('topics/id-topica.md');
+    for (const exported of exports) {
+      const portablePaths = exported.files.map(({ path }) =>
+        path.normalize('NFC').toLocaleLowerCase('en-US'),
+      );
+      expect(new Set(portablePaths).size).toBe(portablePaths.length);
+    }
   });
 
   it('拒绝悬空或类型错误的 Markdown 内部引用', () => {
@@ -203,6 +275,23 @@ describe('OpenQuestionBank GitHub Markdown 导出器', () => {
 
     expect(() => createQuestionBankGithubMarkdownExport(broken, assets)).toThrow(
       '导出引用目标不存在或类型不匹配',
+    );
+  });
+});
+
+describe('Obsidian 页面文件名长度', () => {
+  it('按 UTF-8 字节限制多字节标题的路径段长度', () => {
+    const exported = createQuestionBankObsidianVaultExport(
+      { ...data, topics: [{ ...topic, name: '😀'.repeat(80) }] },
+      assets,
+    );
+    const topicPage = exported.files.find(
+      ({ path }) => path.startsWith('考点/') && path !== '考点/索引.md',
+    );
+
+    expect(topicPage).toBeDefined();
+    expect(Buffer.byteLength(topicPage?.path.split('/').at(-1) ?? '', 'utf8')).toBeLessThanOrEqual(
+      255,
     );
   });
 });
@@ -400,7 +489,7 @@ describe('OpenQuestionBank Notion 导入包导出器', () => {
     );
     expect(exported.manifest).toMatchObject({
       format: 'openquestionbank-notion-import',
-      formatVersion: '2.0.0',
+      formatVersion: '2.1.0',
       schemaVersion: '1.0.0',
       bank: { id: bank.id, name: bank.name, version: bank.version },
       statistics: {

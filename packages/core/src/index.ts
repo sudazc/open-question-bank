@@ -1,5 +1,10 @@
 export { hasBlockingDiagnostics, type Diagnostic, type DiagnosticSeverity } from './diagnostics.js';
 export {
+  evaluateQuestionAnswer,
+  type QuestionAnswerEvaluation,
+  type QuestionAnswerResponse,
+} from './answer-grader.js';
+export {
   ExamGenerationError,
   examGenerationAlgorithmVersion,
   generateExam,

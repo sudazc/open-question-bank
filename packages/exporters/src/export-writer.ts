@@ -6,6 +6,7 @@ import type { Bank } from '@openquestionbank/schema';
 import type { QuestionBankData } from '@openquestionbank/core';
 import {
   assertSafeExportPath,
+  assertUniquePortableExportPaths,
   collectReferencedAssets,
   type ExportAsset,
 } from './export-common.js';
@@ -56,14 +57,7 @@ export async function prepareExportDirectory(
   outputPaths: readonly string[],
 ): Promise<string> {
   const paths = [...outputPaths];
-  const seenPaths = new Set<string>();
-  for (const path of paths) {
-    assertSafeExportPath(path);
-    if (seenPaths.has(path)) {
-      throw new Error(`导出文件路径重复：${path}`);
-    }
-    seenPaths.add(path);
-  }
+  assertUniquePortableExportPaths(paths);
 
   const sourceRoot = await realpath(sourceDirectory);
   const targetDirectory = resolve(outputDirectory);

@@ -2,6 +2,7 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import type { Exam, Question, QuestionGroup } from '../packages/schema/src/types.js';
 import {
   generateExam,
   parseMarkdownDocument,
@@ -314,6 +315,83 @@ describe('OpenQuestionBank Core', () => {
     expect(codes).toContain('OQB-GROUP-003');
     expect(codes).toContain('OQB-REF-003');
     expect(codes).toContain('OQB-EXAM-003');
+  });
+
+  it('校验大量多选答案和题组子题引用', () => {
+    const itemCount = 5_000;
+    const choices = Array.from({ length: itemCount }, (_, index) => ({
+      id: `choice-${index}`,
+      text: `选项 ${index}`,
+    }));
+    const choiceQuestion: Question = {
+      id: 'q-many-choices',
+      type: 'multiple_choice',
+      stem: '选择所有正确选项',
+      choices,
+      answer: { choiceIds: choices.map(({ id }) => id).reverse() },
+      topicIds: [],
+      knowledgeIds: [],
+      difficulty: '入门',
+      tags: [],
+      score: 1,
+      source: { type: 'original' },
+      review: { status: 'draft' },
+    };
+    const groupQuestions: Question[] = Array.from({ length: itemCount }, (_, index) => ({
+      id: `q-group-${index}`,
+      type: 'true_false',
+      stem: `判断题 ${index}`,
+      answer: index % 2 === 0,
+      topicIds: [],
+      knowledgeIds: [],
+      difficulty: '入门',
+      tags: [],
+      score: 1,
+      source: { type: 'original' },
+      review: { status: 'draft' },
+    }));
+    const questionIds = groupQuestions.map(({ id }) => id);
+    const group: QuestionGroup = {
+      id: 'group-large',
+      title: '大型材料题组',
+      passage: '共享材料',
+      questionIds,
+      topicIds: [],
+      source: { type: 'original' },
+      review: { status: 'draft' },
+    };
+    const exam: Exam = {
+      id: 'exam-large-group',
+      title: '大型题组试卷',
+      mode: 'fixed',
+      items: [
+        {
+          kind: 'group',
+          groupId: group.id,
+          questions: questionIds.map((questionId) => ({
+            kind: 'question',
+            questionId,
+            score: 1,
+          })),
+        },
+      ],
+    };
+
+    const result = validateQuestionBank({
+      rootDir,
+      topics: [],
+      knowledge: [],
+      questions: [
+        { file: 'questions/choices.yaml', value: choiceQuestion },
+        ...groupQuestions.map((value, index) => ({ file: `questions/${index}.yaml`, value })),
+      ],
+      groups: [{ file: 'groups/large.yaml', value: group }],
+      exams: [{ file: 'exams/large.yaml', value: exam }],
+      diagnostics: [],
+    });
+
+    expect(result.valid).toBe(true);
+    expect(result.diagnostics).toEqual([]);
   });
 
   it('按随机种子生成可复现且不重复的题目与完整题组', async () => {

@@ -211,7 +211,7 @@ describe('OpenQuestionBank CLI', () => {
     expect(questionPage).toContain('[示例知识点](../knowledge/id-knowledge-getting-started.md)');
     expect(JSON.parse(manifest)).toMatchObject({
       format: 'openquestionbank-github-markdown',
-      formatVersion: '1.0.0',
+      formatVersion: '1.1.0',
       bank: { id: 'my-question-bank', version: '0.1.0' },
       statistics: { totalEntities: 4 },
     });
@@ -293,7 +293,7 @@ describe('OpenQuestionBank CLI', () => {
     expect(questionPage).toContain('OpenQuestionBank 的源数据主要使用什么方式维护？');
     expect(JSON.parse(firstManifest)).toMatchObject({
       format: 'openquestionbank-notion-import',
-      formatVersion: '2.0.0',
+      formatVersion: '2.1.0',
       bank: { id: 'my-question-bank', version: '0.1.0' },
       statistics: { totalEntities: 4 },
     });

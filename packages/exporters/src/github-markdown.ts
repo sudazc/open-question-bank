@@ -9,12 +9,16 @@ import type {
   Topic,
 } from '@openquestionbank/schema';
 import type { QuestionBankData } from '@openquestionbank/core';
-import { normalizeExportAssets, type ExportAsset } from './export-common.js';
+import {
+  assertUniquePortableExportPaths,
+  normalizeExportAssets,
+  type ExportAsset,
+} from './export-common.js';
 import { maskMarkdownCode } from './markdown-utils.js';
 import type { ExportFile } from './export-writer.js';
 
 const format = 'openquestionbank-github-markdown';
-const formatVersion = '1.0.0';
+const formatVersion = '1.1.0';
 
 type EntityKind = 'topic' | 'knowledge' | 'question' | 'group' | 'exam';
 
@@ -100,11 +104,17 @@ export function createQuestionBankGithubMarkdownExport(
     ].sort((left, right) => compareStrings(left.path, right.path)),
   };
 
+  const files = [...markdownFiles, { path: 'manifest.json', contents: stableJson(manifest) }].sort(
+    (left, right) => compareStrings(left.path, right.path),
+  );
+  assertUniquePortableExportPaths([
+    ...files.map(({ path }) => path),
+    ...normalizedAssets.map(({ path }) => path),
+  ]);
+
   return {
     manifest,
-    files: [...markdownFiles, { path: 'manifest.json', contents: stableJson(manifest) }].sort(
-      (left, right) => compareStrings(left.path, right.path),
-    ),
+    files,
     assets: normalizedAssets,
   };
 }
@@ -652,12 +662,17 @@ export function getQuestionAnswerSectionMarkers(questionId: string): {
 }
 
 function entityFilename(id: string): string {
-  const encodedId = id.replace(
-    /[^A-Za-z0-9._-]/g,
-    (character) => `~${character.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0')}`,
-  );
+  const encodedId = [...id]
+    .map((character) =>
+      /^[a-z0-9._-]$/.test(character)
+        ? character
+        : `~${Buffer.from(character, 'utf8').toString('hex').toUpperCase()}`,
+    )
+    .join('');
   if (encodedId.length > 220) {
-    return `id-~b64~${Buffer.from(id, 'utf8').toString('base64url')}.md`;
+    const bytes = Buffer.from(id, 'utf8');
+    const encodedValue = BigInt(`0x${bytes.toString('hex') || '0'}`).toString(36);
+    return `id-~x~${bytes.length.toString(36)}-${encodedValue}.md`;
   }
   return `id-${encodedId}.md`;
 }

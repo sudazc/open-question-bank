@@ -4,7 +4,7 @@ OpenQuestionBank 是一个面向 AI 协作构建题库的开源格式与本地�
 
 本项目提供数据格式、AI 构建指南、题库模板、命令行校验和导出工具。AI 助手负责需求沟通、资料整理和题目编写；OpenQuestionBank 负责把生成的内容组织成可维护的 YAML / Markdown 源文件、发现格式和引用问题，并按需导出为可导入 Obsidian 或 Notion 的文件包。题库内容可通过 Git 版本管理、审阅和协作。
 
-V1.0 基础能力已实现：Schema、Core 读取与校验、题库初始化模板、CLI 校验 / 统计 / 诊断、规则组卷、标准 JSON、GitHub Markdown、Obsidian Vault 和 Notion CSV / Markdown 导入包。自动评分、在线刷题和学习记录尚未实现。
+V1.0 基础能力已实现：Schema、Core 读取 / 校验 / 客观题评分、题库初始化模板、CLI 校验 / 统计 / 诊断、规则组卷、标准 JSON、GitHub Markdown、Obsidian Vault 和 Notion CSV / Markdown 导入包。在线刷题和学习记录尚未实现。
 
 ## 适合什么场景
 
@@ -181,7 +181,7 @@ review:
 水分子的化学式是 H₂O。正文支持 Markdown、表格和数学公式。
 ```
 
-题目和笔记使用 `knowledgeIds` / `topicIds` 关联考点及知识笔记；知识之间可以设置前置和相关关系。图片等本地资源放在 `assets/`，并在实体的 `assets` 字段及 Markdown 链接中使用题库根目录下的相对路径。Core 会检查资源是否存在以及路径是否越出题库目录。
+题目和笔记使用 `knowledgeIds` / `topicIds` 关联考点及知识笔记；知识之间可以设置前置和相关关系。图片等本地资源放在 `assets/`，并在实体的 `assets` 字段及 Markdown 链接中使用题库根目录下的相对路径。Core 会检查资源是否存在以及路径是否越出题库目录。为兼容 Windows、macOS 和 Linux 导出，资源文件名每段不能包含 Windows 非法字符（包括 `:`）或控制字符，不能以点或空格结尾，不能使用 `CON`、`NUL` 等设备名，每段 UTF-8 长度不能超过 255 字节；资源与生成文件之间也不能出现大小写或 Unicode 规范化后重名、文件与目录冲突。遇到导出路径错误时，请重命名冲突文件后再导出。
 
 ## 校验模式
 
@@ -215,6 +215,8 @@ oqb export [目录] [--format json|github-markdown|obsidian|notion] [--out <目�
 - 未知命令、参数错误或执行错误使用退出码 `2`；通过使用退出码 `0`。警告不会单独导致校验失败。
 
 所有命令支持 `--help`，目录参数默认为当前目录。CLI 不要求交互输入，可用于本地脚本或 CI。
+
+需要在自己的程序中按标准答案评估作答时，可调用 Core 的 `evaluateQuestionAnswer` API。客观题采用全对计分，简答题交由人工审核；接口示例和数值容差规则见 [Core 使用说明](docs/core.md#答案评分)。CLI 当前负责题库校验、构建和导出，不提供交互式刷题。
 
 ### 构建规则组卷并导出
 
@@ -310,7 +312,7 @@ Schema 检查单个实体的字段结构；重复 ID、引用目标是否存在�
 
 已实现：Schema 1.0、YAML / Markdown 读取、结构和语义校验、资源检查、题库索引、审核授权模式、初始化模板、确定性规则组卷、CLI 构建 / 校验 / 统计 / 诊断、标准 JSON 导出、GitHub Markdown 阅读包、Obsidian Vault、Notion CSV / Markdown 导入包和发布清单。
 
-尚未实现：自动评分、完整的内容质量审核规则、在线刷题、账号、数据库和学习记录。项目架构和职责边界见 [架构说明](docs/architecture.md)。
+尚未实现：简答题自动语义评分、完整的内容质量审核规则、在线刷题、账号、数据库和学习记录。项目架构和职责边界见 [架构说明](docs/architecture.md)。
 
 ## 开发与贡献
 

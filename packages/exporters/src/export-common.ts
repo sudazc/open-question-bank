@@ -13,16 +13,16 @@ export function normalizeExportAssets(
   assets: readonly ExportAsset[],
 ): ExportAsset[] {
   const assetsByPath = new Map<string, ExportAsset>();
+  assertUniquePortableExportPaths(
+    assets.map(({ path }) => path),
+    '导出资源路径',
+  );
   for (const asset of assets) {
-    assertSafeExportPath(asset.path, '题库资源路径');
     if (!Number.isSafeInteger(asset.sizeBytes) || asset.sizeBytes < 0) {
       throw new Error(`资源文件大小无效：${asset.path}`);
     }
     if (!/^[0-9a-f]{64}$/.test(asset.sha256)) {
       throw new Error(`资源文件 SHA-256 无效：${asset.path}`);
-    }
-    if (assetsByPath.has(asset.path)) {
-      throw new Error(`导出资源路径重复：${asset.path}`);
     }
     assetsByPath.set(asset.path, asset);
   }
@@ -64,9 +64,59 @@ export function assertSafeExportPath(path: string, label = '导出文件路径')
     path.includes('\\') ||
     path.startsWith('/') ||
     segments.length === 0 ||
-    segments.some((segment) => segment === '' || segment === '.' || segment === '..')
+    segments.some(
+      (segment) =>
+        segment === '' ||
+        segment === '.' ||
+        segment === '..' ||
+        segment.endsWith('.') ||
+        segment.endsWith(' ') ||
+        Buffer.byteLength(segment, 'utf8') > 255 ||
+        /[<>"|?*]/.test(segment) ||
+        [...segment].some((character) => (character.codePointAt(0) ?? 0) < 0x20) ||
+        isWindowsReservedName(segment),
+    )
   ) {
     throw new Error(`${label}不安全：${path}`);
+  }
+}
+
+function isWindowsReservedName(segment: string): boolean {
+  const baseName = segment.split('.')[0]?.replace(/[ .]+$/, '') ?? '';
+  return /^(?:con|prn|aux|nul|conin\$|conout\$|com[1-9¹²³]|lpt[1-9¹²³])$/i.test(baseName);
+}
+
+/** 拒绝在大小写或 Unicode 规范化不敏感文件系统上重名的导出路径 */
+export function assertUniquePortableExportPaths(
+  paths: readonly string[],
+  label = '导出文件路径',
+): void {
+  const seenPaths = new Map<string, string>();
+  for (const path of paths) {
+    assertSafeExportPath(path, label);
+    const key = path.normalize('NFC').toUpperCase().toLowerCase();
+    const existingPath = seenPaths.get(key);
+    if (existingPath !== undefined) {
+      if (existingPath === path) {
+        throw new Error(`${label}重复：${path}`);
+      }
+      throw new Error(
+        `${label}在大小写或 Unicode 规范化不敏感的文件系统上冲突：${existingPath}、${path}`,
+      );
+    }
+    seenPaths.set(key, path);
+  }
+
+  for (const [key, path] of seenPaths) {
+    const segments = key.split('/');
+    let parent = '';
+    for (const segment of segments.slice(0, -1)) {
+      parent = parent ? `${parent}/${segment}` : segment;
+      const parentPath = seenPaths.get(parent);
+      if (parentPath !== undefined) {
+        throw new Error(`${label}文件与目录冲突：${parentPath}、${path}`);
+      }
+    }
   }
 }
 

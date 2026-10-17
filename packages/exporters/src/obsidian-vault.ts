@@ -3,7 +3,7 @@ import { posix } from 'node:path';
 import type { Question } from '@openquestionbank/schema';
 import type { QuestionBankData } from '@openquestionbank/core';
 import { maskMarkdownCode } from './markdown-utils.js';
-import type { ExportAsset } from './export-common.js';
+import { assertUniquePortableExportPaths, type ExportAsset } from './export-common.js';
 import type { ExportFile } from './export-writer.js';
 import {
   createQuestionBankGithubMarkdownExport,
@@ -151,11 +151,17 @@ export function createQuestionBankObsidianVaultExport(
     ].sort((left, right) => compareStrings(left.path, right.path)),
   };
 
+  const files = [...markdownFiles, { path: manifestPath, contents: stableJson(manifest) }].sort(
+    (left, right) => compareStrings(left.path, right.path),
+  );
+  assertUniquePortableExportPaths([
+    ...files.map(({ path }) => path),
+    ...markdownPackage.assets.map(({ path }) => path),
+  ]);
+
   return {
     manifest,
-    files: [...markdownFiles, { path: manifestPath, contents: stableJson(manifest) }].sort(
-      (left, right) => compareStrings(left.path, right.path),
-    ),
+    files,
     assets: markdownPackage.assets,
   };
 }
@@ -478,21 +484,24 @@ function questionPageTitle(stem: string): string {
 }
 
 function safePageTitle(value: string, kind: EntityKind): string {
-  const title = [
-    ...[...value.normalize('NFC')]
-      .map((character) => {
-        const codePoint = character.charCodeAt(0);
-        return codePoint < 0x20 || invalidPageTitleCharacters.includes(character) ? ' ' : character;
-      })
-      .join('')
-      .replace(/[\s]+/g, ' ')
-      .replace(/^\.+/, '')
-      .replace(/[. ]+$/, '')
-      .trim(),
-  ]
-    .slice(0, 80)
+  const sanitized = [...value.normalize('NFC')]
+    .map((character) => {
+      const codePoint = character.charCodeAt(0);
+      return codePoint < 0x20 || invalidPageTitleCharacters.includes(character) ? ' ' : character;
+    })
     .join('')
-    .replace(/[. ]+$/, '');
+    .replace(/[\s]+/g, ' ')
+    .replace(/^\.+/, '')
+    .replace(/[. ]+$/, '')
+    .trim();
+  let title = '';
+  for (const character of [...sanitized].slice(0, 80)) {
+    if (Buffer.byteLength(title + character, 'utf8') > 240) {
+      break;
+    }
+    title += character;
+  }
+  title = title.replace(/[. ]+$/, '');
   if (!title) {
     return '未命名' + entityKindLabel(kind);
   }

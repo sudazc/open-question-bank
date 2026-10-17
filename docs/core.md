@@ -30,6 +30,36 @@ const questions = result.index.questionsByKnowledge.get('knowledge-id') ?? [];
 
 如果调用方需要分离文件读取和校验步骤，可以先使用 `loadQuestionBank(directory)`，再将结果传给 `validateQuestionBank(parsed)`。`ValidationResult.data` 只包含通过 Schema 结构校验的实体；`index` 对象提供按 ID 查询和双向关系查询。
 
+## 答案评分
+
+`evaluateQuestionAnswer(question, response)` 按题目保存的答案规则评分。传入的题目应来自通过校验的 `QuestionBankData`；作答使用独立于题库实体的联合类型，不会写入题库文件。
+
+```ts
+import { evaluateQuestionAnswer, validateQuestionBankDirectory } from '@openquestionbank/core';
+
+const validated = await validateQuestionBankDirectory('./my-bank');
+if (!validated.valid) {
+  throw new Error('题库校验未通过');
+}
+
+const question = validated.data.questions.find((item) => item.id === 'question-001');
+if (!question) {
+  throw new Error('题目不存在');
+}
+
+const result = evaluateQuestionAnswer(question, {
+  type: 'single_choice',
+  choiceId: 'choice-a',
+});
+if (result.status === 'graded') {
+  console.log(result.earnedScore, result.maxScore, result.isCorrect);
+}
+```
+
+单选、多选、判断、填空和数值题会返回 `status: 'graded'`、是否正确、得分和题目总分。V1 采用整题全对得分的策略，不提供多选或多空的部分得分。多选按正确选项集合完全匹配，选项顺序不影响结果，重复选项会判错。填空题要求所有空都正确；`caseSensitive` 缺省为 `false`，`whitespace` 缺省为 `trim`，`collapse` 会折叠连续空白，`exact` 保留空白原样。简答题返回 `status: 'manual_review'` 和待评总分，不尝试自动理解文本。
+
+数值答案和作答都使用十进制字符串，不接受指数写法，评分通过整数系数和 `BigInt` 比较，不使用浮点数。容差缺省为零；当数值误差不大于绝对容差或不大于 `abs(标准答案) × 相对容差` 时判为正确。无效的用户数值格式判错。`unitRule` 为 `required` 时必须提交标准单位或 `acceptedUnits` 中的单位；`optional` 允许省略单位，但提交时仍须匹配；`ignored` 不检查单位。未设置 `unitRule` 时，已有标准单位必须精确匹配，标准答案没有单位时作答也不能附带单位。
+
 ## 校验职责
 
 Core 当前执行以下检查：

@@ -1,6 +1,10 @@
 import { createHash } from 'node:crypto';
 import type { QuestionBankData } from '@openquestionbank/core';
-import { normalizeExportAssets, type ExportAsset } from './export-common.js';
+import {
+  assertUniquePortableExportPaths,
+  normalizeExportAssets,
+  type ExportAsset,
+} from './export-common.js';
 import {
   createQuestionBankGithubMarkdownExport,
   getQuestionAnswerSectionMarkers,
@@ -10,7 +14,7 @@ import {
 import type { ExportFile } from './export-writer.js';
 
 const format = 'openquestionbank-notion-import';
-const formatVersion = '2.0.0';
+const formatVersion = '2.1.0';
 const databasePaths = [
   'databases/bank.csv',
   'databases/topics.csv',
@@ -136,11 +140,17 @@ export function createQuestionBankNotionExport(
     ].sort((left, right) => compareStrings(left.path, right.path)),
   };
 
+  const files = [...contentFiles, { path: 'manifest.json', contents: stableJson(manifest) }].sort(
+    (left, right) => compareStrings(left.path, right.path),
+  );
+  assertUniquePortableExportPaths([
+    ...files.map(({ path }) => path),
+    ...normalizedAssets.map(({ path }) => path),
+  ]);
+
   return {
     manifest,
-    files: [...contentFiles, { path: 'manifest.json', contents: stableJson(manifest) }].sort(
-      (left, right) => compareStrings(left.path, right.path),
-    ),
+    files,
     assets: normalizedAssets,
   };
 }

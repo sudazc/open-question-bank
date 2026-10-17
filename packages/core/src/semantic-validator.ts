@@ -187,7 +187,8 @@ function validateQuestionReferences(
         value.choices.map(({ id }) => id),
         diagnostics,
       );
-      if (!value.choices.some(({ id }) => id === value.answer.choiceId)) {
+      const choiceIds = new Set(value.choices.map(({ id }) => id));
+      if (!choiceIds.has(value.answer.choiceId)) {
         addDiagnostic(
           diagnostics,
           question.file,
@@ -206,8 +207,9 @@ function validateQuestionReferences(
         value.choices.map(({ id }) => id),
         diagnostics,
       );
+      const choiceIds = new Set(value.choices.map(({ id }) => id));
       for (const choiceId of value.answer.choiceIds) {
-        if (!value.choices.some(({ id }) => id === choiceId)) {
+        if (!choiceIds.has(choiceId)) {
           addDiagnostic(
             diagnostics,
             question.file,
@@ -426,6 +428,7 @@ function validateExamItem(
   }
   seenGroups.add(item.groupId);
   const group = groups.get(item.groupId);
+  const groupQuestionIds = new Set(group?.value.questionIds ?? []);
   const includedIds = new Set<string>();
   item.questions.forEach((questionItem, questionIndex) => {
     const questionField = `${field}.questions[${questionIndex}].questionId`;
@@ -438,7 +441,7 @@ function validateExamItem(
       '试卷题组子题',
       diagnostics,
     );
-    if (!group?.value.questionIds.includes(questionItem.questionId)) {
+    if (!groupQuestionIds.has(questionItem.questionId)) {
       addDiagnostic(
         diagnostics,
         exam.file,
