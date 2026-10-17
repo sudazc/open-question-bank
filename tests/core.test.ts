@@ -330,6 +330,44 @@ describe('OpenQuestionBank Core', () => {
     expect(codes).toContain('OQB-EXAM-003');
   });
 
+  it('提示已生成试卷的题库版本与当前版本不一致，但不阻止校验', async () => {
+    for (const { id, version } of [
+      { id: 'exam-result-current', version: '1.0.0' },
+      { id: 'exam-result-old', version: '0.9.0' },
+    ]) {
+      await writeFile(
+        join(rootDir, `exams/${id}.yaml`),
+        [
+          `id: ${id}`,
+          'title: 已生成试卷',
+          'mode: generated',
+          'kind: result',
+          'items:',
+          '  - kind: question',
+          '    questionId: q-one',
+          '    score: 1',
+          'randomSeed: version-check',
+          `bankVersion: "${version}"`,
+          'algorithmVersion: "1.2.0"',
+        ].join('\n'),
+      );
+    }
+
+    const result = await validateQuestionBankDirectory(rootDir);
+    const versionDiagnostics = result.diagnostics.filter(({ code }) => code === 'OQB-EXAM-004');
+
+    expect(result.valid).toBe(true);
+    expect(versionDiagnostics).toEqual([
+      expect.objectContaining({
+        code: 'OQB-EXAM-004',
+        severity: 'warning',
+        file: 'exams/exam-result-old.yaml',
+        entityId: 'exam-result-old',
+        fieldPath: 'bankVersion',
+      }),
+    ]);
+  });
+
   it('校验大量多选答案和题组子题引用', () => {
     const itemCount = 5_000;
     const choices = Array.from({ length: itemCount }, (_, index) => ({

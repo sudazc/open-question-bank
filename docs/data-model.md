@@ -55,6 +55,8 @@ Markdown 知识文件的 YAML Front Matter 存放 `Knowledge` 元数据，正文
 
 当前抽题算法版本为 `1.2.0`：规则按候选余量和模板顺序处理，候选按稳定 ID 排序后使用 SHA-256 种子流进行 Fisher–Yates 洗牌；最多检查 100,000 个候选组合。达到上限时会报告搜索未完成，不会将其误报为候选不足。相同题库数据、模板和随机种子产生相同结果。改变算法行为时必须更新 `algorithmVersion`。
 
+Core 校验已生成结果时，会将 `bankVersion` 与当前 `Bank.version` 对照。版本不一致时会发出非阻断警告，但不会因此判定历史结果无效；需要基于当前题库出卷时，可从规则模板重新生成。
+
 ## 引用与索引
 
 实体间关联只使用 ID。Markdown 可以写 `oqb://knowledge/{id}`、`oqb://question/{id}`、`oqb://topic/{id}` 和 `oqb://exam/{id}`。引用解析、类型检查、索引构建和导出时的链接重写由 `core` 与具体导出器负责。

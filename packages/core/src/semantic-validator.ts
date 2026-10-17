@@ -24,7 +24,7 @@ export function validateSemantics(bank: LocatedQuestionBank, diagnostics: Diagno
   validateKnowledgeReferences(knowledge, diagnostics);
   validateQuestionReferences(topics, knowledge, questions, diagnostics);
   validateQuestionGroupReferences(topics, questions, groups, diagnostics);
-  validateExamReferences(questions, groups, exams, diagnostics);
+  validateExamReferences(bank, questions, groups, exams, diagnostics);
   validateMarkdownReferences(bank, topics, knowledge, questions, exams, diagnostics);
   detectTopicCycles([...topics.values()], topics, diagnostics);
   detectKnowledgePrerequisiteCycles([...knowledge.values()], knowledge, diagnostics);
@@ -329,6 +329,7 @@ function validateQuestionGroupReferences(
 }
 
 function validateExamReferences(
+  bank: LocatedQuestionBank,
   questions: EntityMap<Question>,
   groups: EntityMap<QuestionGroup>,
   exams: EntityMap<Exam>,
@@ -339,6 +340,24 @@ function validateExamReferences(
   for (const exam of exams.values()) {
     const value = exam.value;
     if ('items' in value) {
+      if (
+        bank.bank &&
+        value.mode === 'generated' &&
+        value.kind === 'result' &&
+        value.bankVersion !== bank.bank.value.version
+      ) {
+        diagnostics.push({
+          code: 'OQB-EXAM-004',
+          severity: 'warning',
+          message: `已生成试卷记录的题库版本 ${value.bankVersion} 与当前题库版本 ${bank.bank.value.version} 不一致`,
+          file: exam.file,
+          entityId: value.id,
+          fieldPath: 'bankVersion',
+          suggestion:
+            '确认该试卷结果是否仍适用于当前题库；需要当前版本试卷时，可从规则模板重新生成',
+        });
+      }
+
       const seenQuestions = new Set<string>();
       const seenGroups = new Set<string>();
       value.items.forEach((item, itemIndex) => {
