@@ -1,5 +1,5 @@
 import type { Dirent } from 'node:fs';
-import { lstat, opendir, readFile, realpath } from 'node:fs/promises';
+import { lstat, opendir, open, realpath, type FileHandle } from 'node:fs/promises';
 import { isAbsolute, relative, resolve, sep, win32 } from 'node:path';
 import { TextDecoder } from 'node:util';
 import { validateAssetReferences } from './asset-validator.js';
@@ -427,6 +427,7 @@ async function readDocument(
   canonicalRoot: string,
 ): Promise<{ value: unknown; sizeBytes: number } | { diagnostic: Diagnostic; sizeBytes?: number }> {
   let sizeBytes = 0;
+  let file: FileHandle | undefined;
   try {
     const metadata = await lstat(fullPath);
     if (metadata.isSymbolicLink() || !metadata.isFile()) {
@@ -449,16 +450,60 @@ async function readDocument(
     }
     if (metadata.size > maxTotalBytes - totalBytesRead) {
       return {
+        diagnostic: createTotalSizeLimitDiagnostic(relativePath, metadata.size, maxTotalBytes),
+      };
+    }
+
+    file = await open(fullPath, 'r');
+    const openedMetadata = await file.stat();
+    const deviceChanged =
+      metadata.dev !== 0 && openedMetadata.dev !== 0 && openedMetadata.dev !== metadata.dev;
+    if (!openedMetadata.isFile() || deviceChanged || openedMetadata.ino !== metadata.ino) {
+      return { diagnostic: unsafePathDiagnosticFromRelative(relativePath) };
+    }
+    const openedCanonicalFile = await realpath(fullPath);
+    if (!isContained(canonicalRoot, openedCanonicalFile)) {
+      return { diagnostic: unsafePathDiagnosticFromRelative(relativePath) };
+    }
+    if (openedMetadata.size > maxFileBytes) {
+      return {
         diagnostic: {
-          code: 'OQB-FILE-016',
-          severity: 'fatal',
-          message: `文件大小 ${metadata.size} 字节会使题库累计读取量超过限制 ${maxTotalBytes} 字节`,
+          code: 'OQB-FILE-007',
+          severity: 'error',
+          message: `文件大小 ${openedMetadata.size} 字节，超过限制 ${maxFileBytes} 字节`,
           file: relativePath,
-          suggestion: '拆分题库或显式提高 maxTotalBytes 限制',
+          suggestion: '拆分内容或显式提高 maxFileBytes 限制',
         },
       };
     }
-    const bytes = await readFile(fullPath);
+    if (openedMetadata.size > maxTotalBytes - totalBytesRead) {
+      return {
+        diagnostic: createTotalSizeLimitDiagnostic(
+          relativePath,
+          openedMetadata.size,
+          maxTotalBytes,
+        ),
+      };
+    }
+
+    const allowedBytes = Math.min(maxFileBytes, maxTotalBytes - totalBytesRead);
+    const readResult = await readFileWithinLimit(file, allowedBytes);
+    if (readResult.kind === 'limit-exceeded') {
+      return {
+        diagnostic:
+          maxFileBytes <= maxTotalBytes - totalBytesRead
+            ? {
+                code: 'OQB-FILE-007',
+                severity: 'error',
+                message: `文件读取量超过单文件限制 ${maxFileBytes} 字节`,
+                file: relativePath,
+                suggestion: '拆分内容或显式提高 maxFileBytes 限制',
+              }
+            : createTotalSizeLimitDiagnostic(relativePath, allowedBytes + 1, maxTotalBytes),
+      };
+    }
+
+    const bytes = readResult.bytes;
     sizeBytes = bytes.byteLength;
     const source = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
     if (kind === 'yaml') {
@@ -482,7 +527,54 @@ async function readDocument(
       },
       ...(sizeBytes > 0 ? { sizeBytes } : {}),
     };
+  } finally {
+    await file?.close();
   }
+}
+
+type LimitedFileReadResult = { kind: 'complete'; bytes: Buffer } | { kind: 'limit-exceeded' };
+
+/** 最多返回上限字节内容，并读取额外一个字节判断是否超限 */
+export async function readFileWithinLimit(
+  file: FileHandle,
+  maxBytes: number,
+): Promise<LimitedFileReadResult> {
+  if (!Number.isSafeInteger(maxBytes) || maxBytes < 0) {
+    throw new RangeError('读取上限必须是非负安全整数');
+  }
+
+  const chunk = Buffer.allocUnsafe(Math.min(65_536, Math.max(1, maxBytes)));
+  const chunks: Buffer[] = [];
+  let totalBytesRead = 0;
+  while (totalBytesRead < maxBytes) {
+    const bytesToRead = Math.min(chunk.length, maxBytes - totalBytesRead);
+    const { bytesRead } = await file.read(chunk, 0, bytesToRead, totalBytesRead);
+    if (bytesRead === 0) {
+      return { kind: 'complete', bytes: Buffer.concat(chunks, totalBytesRead) };
+    }
+    chunks.push(Buffer.from(chunk.subarray(0, bytesRead)));
+    totalBytesRead += bytesRead;
+  }
+
+  const overflow = Buffer.allocUnsafe(1);
+  const { bytesRead } = await file.read(overflow, 0, 1, totalBytesRead);
+  return bytesRead === 0
+    ? { kind: 'complete', bytes: Buffer.concat(chunks, totalBytesRead) }
+    : { kind: 'limit-exceeded' };
+}
+
+function createTotalSizeLimitDiagnostic(
+  relativePath: string,
+  sizeBytes: number,
+  maxTotalBytes: number,
+): Diagnostic {
+  return {
+    code: 'OQB-FILE-016',
+    severity: 'fatal',
+    message: `文件大小 ${sizeBytes} 字节会使题库累计读取量超过限制 ${maxTotalBytes} 字节`,
+    file: relativePath,
+    suggestion: '拆分题库或显式提高 maxTotalBytes 限制',
+  };
 }
 
 function resolveBankRelativePath(rootDir: string, relativePath: string): string | undefined {

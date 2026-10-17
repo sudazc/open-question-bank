@@ -1,8 +1,9 @@
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, open, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Exam, Question, QuestionGroup } from '../packages/schema/src/types.js';
+import { readFileWithinLimit } from '../packages/core/src/loader.js';
 import {
   generateExam,
   parseMarkdownDocument,
@@ -1108,6 +1109,22 @@ describe('OpenQuestionBank Core', () => {
 
     expect(limitDiagnostic?.file).toBe('topics/root.yaml');
     expect(result.data.topics.map(({ id }) => id)).toEqual(['topic-child']);
+  });
+
+  it('有界读取接受恰好达到上限的内容并拒绝超限内容', async () => {
+    const filePath = join(rootDir, 'limited.txt');
+    await writeFile(filePath, '123456');
+    const file = await open(filePath, 'r');
+
+    try {
+      expect(await readFileWithinLimit(file, 6)).toEqual({
+        kind: 'complete',
+        bytes: Buffer.from('123456'),
+      });
+      expect(await readFileWithinLimit(file, 5)).toEqual({ kind: 'limit-exceeded' });
+    } finally {
+      await file.close();
+    }
   });
 
   it('拒绝无效的题库累计输入大小限制', async () => {
