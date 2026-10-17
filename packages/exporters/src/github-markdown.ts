@@ -599,7 +599,7 @@ function replaceMarkdownMatches(
   replace: (match: RegExpMatchArray) => string,
   prefixGroup = 0,
 ): string {
-  const visibleMarkdown = createEntityDecodedSearchView(markdown);
+  const visibleMarkdown = createDecodedMarkdownSearchView(markdown);
   const matches = [...visibleMarkdown.text.matchAll(pattern)];
   let result = markdown;
   for (const match of matches.reverse()) {
@@ -621,44 +621,110 @@ function replaceMarkdownMatches(
   return result;
 }
 
-function createEntityDecodedSearchView(markdown: string): {
+interface MarkdownSearchView {
   text: string;
   sourceStarts: number[];
   sourceEnds: number[];
-} {
-  const masked = maskMarkdownCode(markdown);
-  let text = '';
-  const sourceStarts: number[] = [];
-  const sourceEnds: number[] = [];
+}
 
-  const append = (value: string, sourceStart: number, sourceEnd: number): void => {
-    text += value;
-    for (let index = 0; index < value.length; index += 1) {
-      sourceStarts.push(sourceStart);
-      sourceEnds.push(sourceEnd);
-    }
+function createDecodedMarkdownSearchView(markdown: string): MarkdownSearchView {
+  const visibleMarkdown = maskMarkdownCode(markdown);
+  const initialView: MarkdownSearchView = {
+    text: visibleMarkdown,
+    sourceStarts: Array.from({ length: markdown.length }, (_, index) => index),
+    sourceEnds: Array.from({ length: markdown.length }, (_, index) => index + 1),
   };
 
-  for (let index = 0; index < markdown.length;) {
-    if (markdown[index] === '&' && masked[index] === '&') {
-      const entity = /^&(?:#[xX][0-9a-fA-F]+;?|#\d+;?|[A-Za-z][A-Za-z0-9]+;)/.exec(
-        markdown.slice(index),
-      )?.[0];
-      if (entity) {
-        const decoded = decodeHtmlCharacterReferences(entity);
-        if (decoded !== entity) {
-          append(decoded, index, index + entity.length);
-          index += entity.length;
-          continue;
-        }
+  return decodePercentEncodedSearchView(
+    decodeHtmlEntitiesInSearchView(decodeMarkdownEscapesInSearchView(initialView)),
+  );
+}
+
+function decodeMarkdownEscapesInSearchView(view: MarkdownSearchView): MarkdownSearchView {
+  const result = createEmptySearchView();
+  for (let index = 0; index < view.text.length; index += 1) {
+    const character = view.text[index] ?? '';
+    const next = view.text[index + 1];
+    if (character === '\\' && next !== undefined && isMarkdownEscapable(next)) {
+      appendMappedSearchText(result, view, next, index, index + 2);
+      index += 1;
+    } else {
+      appendMappedSearchText(result, view, character, index, index + 1);
+    }
+  }
+  return result;
+}
+
+function decodeHtmlEntitiesInSearchView(view: MarkdownSearchView): MarkdownSearchView {
+  const result = createEmptySearchView();
+  for (let index = 0; index < view.text.length; index += 1) {
+    const entity = /^&(?:#[xX][0-9a-fA-F]+;?|#\d+;?|[A-Za-z][A-Za-z0-9]+;)/.exec(
+      view.text.slice(index),
+    )?.[0];
+    if (entity) {
+      const decoded = decodeHtmlCharacterReferences(entity);
+      if (decoded !== entity) {
+        appendMappedSearchText(result, view, decoded, index, index + entity.length);
+        index += entity.length - 1;
+        continue;
       }
     }
-
-    append(masked[index] ?? '', index, index + 1);
-    index += 1;
+    appendMappedSearchText(result, view, view.text[index] ?? '', index, index + 1);
   }
+  return result;
+}
 
-  return { text, sourceStarts, sourceEnds };
+function decodePercentEncodedSearchView(view: MarkdownSearchView): MarkdownSearchView {
+  const result = createEmptySearchView();
+  for (let index = 0; index < view.text.length; index += 1) {
+    const encoded = /^%(?:[0-9a-fA-F]{2})+/.exec(view.text.slice(index))?.[0];
+    if (encoded) {
+      let decoded: string;
+      try {
+        decoded = decodeURIComponent(encoded);
+      } catch {
+        decoded = encoded;
+      }
+      appendMappedSearchText(result, view, decoded, index, index + encoded.length);
+      index += encoded.length - 1;
+      continue;
+    }
+    appendMappedSearchText(result, view, view.text[index] ?? '', index, index + 1);
+  }
+  return result;
+}
+
+function isMarkdownEscapable(character: string): boolean {
+  const code = character.charCodeAt(0);
+  return (
+    (code >= 33 && code <= 47) ||
+    (code >= 58 && code <= 64) ||
+    (code >= 91 && code <= 96) ||
+    (code >= 123 && code <= 126)
+  );
+}
+
+function createEmptySearchView(): MarkdownSearchView {
+  return { text: '', sourceStarts: [], sourceEnds: [] };
+}
+
+function appendMappedSearchText(
+  target: MarkdownSearchView,
+  source: MarkdownSearchView,
+  value: string,
+  start: number,
+  end: number,
+): void {
+  const sourceStart = source.sourceStarts[start];
+  const sourceEnd = source.sourceEnds[end - 1];
+  if (sourceStart === undefined || sourceEnd === undefined || value.length === 0) {
+    return;
+  }
+  target.text += value;
+  for (let index = 0; index < value.length; index += 1) {
+    target.sourceStarts.push(sourceStart);
+    target.sourceEnds.push(sourceEnd);
+  }
 }
 
 function entityMarkdownLink(

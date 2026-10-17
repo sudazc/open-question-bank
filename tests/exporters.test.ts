@@ -217,43 +217,51 @@ describe('OpenQuestionBank GitHub Markdown 导出器', () => {
 
   it('解码 HTML 字符引用并改写内联与引用式资源链接', () => {
     const assetPath = 'assets/diagram&guide.svg';
+    const encodedAssetPath = 'assets/diagram+guide.svg';
+    const escapedAssetPath = 'assets/diagram,guide.svg';
     const linkedData: QuestionBankData = {
       ...data,
       knowledge: [
         {
           ...knowledge,
-          assets: [assetPath],
+          assets: [assetPath, encodedAssetPath, escapedAssetPath],
           body: [
             '![图](<assets/diagram&amp;guide.svg?view=raw#preview>)',
             '[diagram]: <&#97;ssets&sol;diagram&#38;guide&period;svg>',
             '[图][diagram]',
+            '![百分号编码](assets/diagram%2bguide.svg)',
+            '![Markdown 转义](assets/diagram\\,guide.svg)',
           ].join('\n\n'),
         },
       ],
     };
     const imageBytes = new TextEncoder().encode('<svg/>');
-    const imageAsset = {
-      path: assetPath,
+    const imageAssets = [assetPath, encodedAssetPath, escapedAssetPath].map((path) => ({
+      path,
       sizeBytes: imageBytes.byteLength,
       sha256: createHash('sha256').update(imageBytes).digest('hex'),
-    };
-    const githubExport = createQuestionBankGithubMarkdownExport(linkedData, [imageAsset]);
+    }));
+    const githubExport = createQuestionBankGithubMarkdownExport(linkedData, imageAssets);
     const githubKnowledge = githubExport.files.find(
       ({ path }) => path === 'knowledge/id-knowledge-foundations.md',
     )?.contents;
-    const obsidianExport = createQuestionBankObsidianVaultExport(linkedData, [imageAsset]);
+    const obsidianExport = createQuestionBankObsidianVaultExport(linkedData, imageAssets);
     const obsidianKnowledge = obsidianExport.files.find(
       ({ path }) => path === '知识笔记/基础知识.md',
     )?.contents;
-    const notionExport = createQuestionBankNotionExport(linkedData, [imageAsset]);
+    const notionExport = createQuestionBankNotionExport(linkedData, imageAssets);
     const notionKnowledge = notionExport.files.find(
       ({ path }) => path === 'knowledge/id-knowledge-foundations.md',
     )?.contents;
 
     expect(githubKnowledge).toContain('![图](<../assets/diagram%26guide.svg?view=raw#preview>)');
     expect(githubKnowledge).toContain('[diagram]: <../assets/diagram%26guide.svg>');
+    expect(githubKnowledge).toContain('![百分号编码](../assets/diagram%2Bguide.svg)');
+    expect(githubKnowledge).toContain('![Markdown 转义](../assets/diagram%2Cguide.svg)');
     expect(obsidianKnowledge).toContain('![[assets/diagram&guide.svg#preview]]');
     expect(obsidianKnowledge).toContain('[diagram]: <../assets/diagram%26guide.svg>');
+    expect(obsidianKnowledge).toContain('![[assets/diagram+guide.svg]]');
+    expect(obsidianKnowledge).toContain('![[assets/diagram,guide.svg]]');
     expect(notionKnowledge).toContain('![图](<../assets/diagram%26guide.svg?view=raw#preview>)');
   });
 
