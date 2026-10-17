@@ -356,7 +356,10 @@ export function extractMarkdownDestinations(markdown: string): string[] {
     const label = match[1];
     const destination = match[2] ?? match[3];
     if (label && destination) {
-      references.set(normalizeReferenceLabel(label), destination);
+      const normalizedLabel = normalizeReferenceLabel(label);
+      if (!references.has(normalizedLabel)) {
+        references.set(normalizedLabel, destination);
+      }
       const start = match.index;
       if (start !== undefined) {
         maskRange(searchableCharacters, start, start + match[0].length);

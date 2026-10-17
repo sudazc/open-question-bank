@@ -601,6 +601,24 @@ describe('OpenQuestionBank Core', () => {
     }
   });
 
+  it('重复的引用定义按首个目标检查脚本协议', async () => {
+    const note = knowledgeMarkdown('k-one', '', '').replace(
+      '正文和引用 [关联知识](oqb://knowledge/)。',
+      [
+        '[危险重复引用链接][script]',
+        '',
+        '[script]: javascript:alert(1)',
+        '[script]: https://example.com',
+      ].join('\n'),
+    );
+    await writeFile(join(rootDir, 'knowledge/one.md'), note);
+
+    const result = await validateQuestionBankDirectory(rootDir);
+
+    expect(result.valid).toBe(false);
+    expect(result.diagnostics.map(({ code }) => code)).toContain('OQB-SECURITY-002');
+  });
+
   it('不会将反斜杠转义的反引号内容误判为代码示例', async () => {
     const note = knowledgeMarkdown('k-one', '', '').replace(
       '正文和引用 [关联知识](oqb://knowledge/)。',

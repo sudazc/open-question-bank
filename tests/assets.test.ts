@@ -70,6 +70,37 @@ describe('Core 资源校验', () => {
     expect(result.diagnostics.map(({ code }) => code)).toContain('OQB-ASSET-003');
   });
 
+  it('重复的引用标签使用首个定义', async () => {
+    await writeFile(join(rootDir, 'assets/valid.svg'), '<svg/>');
+    await writeFile(
+      join(rootDir, 'knowledge/note.md'),
+      knowledgeMarkdown(
+        [],
+        [
+          '![首个目标缺失][first]',
+          '![后续目标生效错误][second]',
+          '[first]: <assets/missing-first.svg>',
+          '[first]: <assets/valid.svg>',
+          '[second]: <assets/valid.svg>',
+          '[second]: <assets/missing-later.svg>',
+        ].join('\n'),
+      ),
+    );
+
+    const result = await validateQuestionBankDirectory(rootDir);
+    const missingAssetMessages = result.diagnostics
+      .filter(({ code }) => code === 'OQB-ASSET-002')
+      .map(({ message }) => message);
+
+    expect(result.valid).toBe(false);
+    expect(
+      missingAssetMessages.some((message) => message.includes('assets/missing-first.svg')),
+    ).toBe(true);
+    expect(
+      missingAssetMessages.some((message) => message.includes('assets/missing-later.svg')),
+    ).toBe(false);
+  });
+
   it('报告未登记、未引用和缺失的资源文件', async () => {
     await writeFile(
       join(rootDir, 'knowledge/note.md'),
