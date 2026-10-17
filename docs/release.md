@@ -15,7 +15,7 @@ pnpm oqb init ../my-question-bank
 pnpm oqb validate ../my-question-bank
 ```
 
-压缩包包含编译后的 `schema`、`core`、`exporters` 和 CLI 包、初始化模板、使用文档及锁文件。安装步骤只安装运行依赖，不会安装开发依赖。题库目录可以放在预构建包目录之外，之后可独立使用 Git 管理。
+压缩包包含编译后的 `schema`、`core`、`exporters` 和 CLI 包、初始化模板、使用文档及锁文件；仓库包含 `LICENSE` 或 `NOTICE` 时，也会一并打包。安装步骤只安装运行依赖，不会安装开发依赖。题库目录可以放在预构建包目录之外，之后可独立使用 Git 管理。
 
 Windows PowerShell 也可以使用系统自带的 `tar` 解压，然后执行相同的 pnpm 命令：
 

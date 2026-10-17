@@ -43,6 +43,12 @@ jobs:
           verify_root="$RUNNER_TEMP/openquestionbank-release-check"
           mkdir -p "$verify_root"
           tar -xzf "dist/release/openquestionbank-v${version}-prebuilt.tar.gz" -C "$verify_root"
+          if [[ -f "$GITHUB_WORKSPACE/LICENSE" ]]; then
+            test -f "$verify_root/openquestionbank-v${version}/LICENSE"
+          fi
+          if [[ -f "$GITHUB_WORKSPACE/NOTICE" ]]; then
+            test -f "$verify_root/openquestionbank-v${version}/NOTICE"
+          fi
           cd "$verify_root/openquestionbank-v${version}"
           pnpm install --prod --frozen-lockfile
           pnpm oqb --help

@@ -61,6 +61,8 @@ try {
     '.npmrc',
     'AI_GUIDE.md',
     'CONTRIBUTING.md',
+    'LICENSE',
+    'NOTICE',
     'README.md',
     'package.json',
     'pnpm-lock.yaml',
