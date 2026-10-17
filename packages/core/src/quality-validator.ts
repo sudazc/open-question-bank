@@ -1,3 +1,4 @@
+import { normalizeBlankAnswer } from './answer-grader.js';
 import type { Diagnostic } from './diagnostics.js';
 import type { ValidationMode } from './publication-validator.js';
 import type { LocatedEntity, LocatedQuestionBank } from './types.js';
@@ -43,6 +44,7 @@ export function validateContentQuality(
       });
     }
   }
+  validateDuplicateAcceptedAnswers(bank, diagnostics);
 
   const firstQuestionByStem = new Map<string, LocatedEntity<{ id: string }>>();
   for (const question of bank.questions) {
@@ -87,6 +89,41 @@ export function validateContentQuality(
         }
       }
     }
+  }
+}
+
+function validateDuplicateAcceptedAnswers(
+  bank: LocatedQuestionBank,
+  diagnostics: Diagnostic[],
+): void {
+  for (const question of bank.questions) {
+    if (question.value.type !== 'fill_blank') {
+      continue;
+    }
+    question.value.answer.blanks.forEach((blank, blankIndex) => {
+      const firstAnswerByNormalizedText = new Map<string, number>();
+      blank.acceptedAnswers.forEach((answer, answerIndex) => {
+        const normalizedAnswer = normalizeBlankAnswer(
+          answer,
+          blank.caseSensitive ?? false,
+          blank.whitespace ?? 'trim',
+        );
+        const firstAnswerIndex = firstAnswerByNormalizedText.get(normalizedAnswer);
+        if (firstAnswerIndex !== undefined) {
+          diagnostics.push({
+            code: 'OQB-QUALITY-005',
+            severity: 'warning',
+            message: `填空允许答案与第 ${firstAnswerIndex + 1} 个答案按评分规则规范化后重复`,
+            file: question.file,
+            entityId: question.value.id,
+            fieldPath: `answer.blanks[${blankIndex}].acceptedAnswers[${answerIndex}]`,
+            suggestion: '移除等价答案，或确认大小写和空白规则是否符合预期',
+          });
+        } else {
+          firstAnswerByNormalizedText.set(normalizedAnswer, answerIndex);
+        }
+      });
+    });
   }
 }
 

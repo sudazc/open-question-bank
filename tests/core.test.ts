@@ -745,6 +745,28 @@ describe('OpenQuestionBank Core', () => {
     );
   });
 
+  it('报告按填空评分规则规范化后重复的允许答案', async () => {
+    await writeFile(
+      join(rootDir, 'questions/one.yaml'),
+      fillBlankQuestionYaml('q-one', 'k-one', '答案是 {{blank-a}}。', ['blank-a']).replace(
+        'acceptedAnswers: [正确答案]',
+        'acceptedAnswers: [Answer, " answer "]',
+      ),
+    );
+
+    const result = await validateQuestionBankDirectory(rootDir);
+
+    expect(result.valid).toBe(true);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'OQB-QUALITY-005',
+        severity: 'warning',
+        entityId: 'q-one',
+        fieldPath: 'answer.blanks[0].acceptedAnswers[1]',
+      }),
+    );
+  });
+
   it('拒绝只包含空白的许可证、维护者名称、难度和答案内容', async () => {
     const bankPath = join(rootDir, 'bank.yaml');
     const bank = await readFile(bankPath, 'utf8');

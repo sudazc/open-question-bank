@@ -122,7 +122,12 @@ function createGradedResult(question: Question, isCorrect: boolean): QuestionAns
   };
 }
 
-function normalizeBlankAnswer(value: string, caseSensitive: boolean, whitespace: string): string {
+/** 按题目的大小写和空白规则标准化填空答案 */
+export function normalizeBlankAnswer(
+  value: string,
+  caseSensitive: boolean,
+  whitespace: string,
+): string {
   let normalized = value;
   if (whitespace === 'trim') {
     normalized = normalized.trim();
