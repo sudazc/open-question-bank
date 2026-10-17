@@ -54,6 +54,22 @@ describe('Core 资源校验', () => {
     expect(result.diagnostics).toEqual([]);
   });
 
+  it('检查块引用中的引用式资源链接定义', async () => {
+    await writeFile(
+      join(rootDir, 'knowledge/note.md'),
+      knowledgeMarkdown(
+        [],
+        ['> ![块引用图片][diagram]', '>', '> [diagram]: <assets/missing.svg>'].join('\n'),
+      ),
+    );
+
+    const result = await validateQuestionBankDirectory(rootDir);
+
+    expect(result.valid).toBe(false);
+    expect(result.diagnostics.map(({ code }) => code)).toContain('OQB-ASSET-002');
+    expect(result.diagnostics.map(({ code }) => code)).toContain('OQB-ASSET-003');
+  });
+
   it('报告未登记、未引用和缺失的资源文件', async () => {
     await writeFile(
       join(rootDir, 'knowledge/note.md'),

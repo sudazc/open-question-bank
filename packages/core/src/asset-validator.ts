@@ -349,7 +349,7 @@ function addAssetDiagnostic(
 export function extractMarkdownDestinations(markdown: string): string[] {
   const source = maskMarkdownCode(markdown);
   const referencePattern =
-    /^[ \t]{0,3}\[([^\]\n]+)\]:[ \t]*(?:<([^>\n]*)>|((?:\\.|[^ \t\r\n])+))/gm;
+    /^(?:[ \t]{0,3}>[ \t]?)*[ \t]{0,3}\[([^\]\n]+)\]:[ \t]*(?:<([^>\n]*)>|((?:\\.|[^ \t\r\n])+))/gm;
   const references = new Map<string, string>();
   const searchableCharacters = source.split('');
   for (const match of source.matchAll(referencePattern)) {

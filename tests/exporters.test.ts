@@ -432,10 +432,11 @@ describe('OpenQuestionBank Obsidian Vault 导出器', () => {
           ...knowledge,
           body: [
             '[question-ref]: <oqb://question/question-single-choice>',
-            '[figure-ref]: <assets/triangle.svg>',
+            '> ![三角形][figure-ref]',
+            '>',
+            '> [figure-ref]: <assets/triangle.svg>',
             '',
             '[关联题目][question-ref]',
-            '![三角形][figure-ref]',
             '[另一处关联题目](oqb://question/question-single-choice)',
           ].join('\n'),
         },
@@ -452,10 +453,11 @@ describe('OpenQuestionBank Obsidian Vault 导出器', () => {
     const encodedQuestionPath = (questionPath ?? '').split('/').map(encodeURIComponent).join('/');
 
     expect(knowledgeContents).toContain('[关联题目][question-ref]');
+    expect(knowledgeContents).toContain('> ![三角形][figure-ref]');
     expect(questionPath).toBeDefined();
     expect(knowledgeContents).toContain('[[' + (questionPath?.replace(/\.md$/, '') ?? '') + '|');
     expect(knowledgeContents).toContain('[question-ref]: <../' + encodedQuestionPath + '>');
-    expect(knowledgeContents).toContain('[figure-ref]: <../assets/triangle.svg>');
+    expect(knowledgeContents).toContain('> [figure-ref]: <../assets/triangle.svg>');
     expect(knowledgeContents).not.toContain('../questions/id-question-single-choice.md');
   });
 
