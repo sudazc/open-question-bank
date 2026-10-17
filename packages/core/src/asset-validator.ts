@@ -529,11 +529,10 @@ async function inspectSvgContent(
     }
     file = await open(fullPath, 'r');
     const openedMetadata = await file.stat();
-    if (
-      !openedMetadata.isFile() ||
-      openedMetadata.dev !== metadata.dev ||
-      openedMetadata.ino !== metadata.ino
-    ) {
+    // Windows Node 22 的 lstat 可能返回 dev=0，而文件句柄 stat 返回卷号
+    const deviceChanged =
+      metadata.dev !== 0 && openedMetadata.dev !== 0 && openedMetadata.dev !== metadata.dev;
+    if (!openedMetadata.isFile() || deviceChanged || openedMetadata.ino !== metadata.ino) {
       return `SVG 文件在检查期间发生变化：${relativePath}`;
     }
     const canonicalPath = await realpath(fullPath);

@@ -50,7 +50,7 @@ describe('Core 资源校验', () => {
 
     const result = await validateQuestionBankDirectory(rootDir);
 
-    expect(result.valid).toBe(true);
+    expect(result.valid, JSON.stringify(result.diagnostics, null, 2)).toBe(true);
     expect(result.diagnostics).toEqual([]);
   });
 
