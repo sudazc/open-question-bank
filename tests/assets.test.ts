@@ -119,6 +119,38 @@ describe('Core 资源校验', () => {
     );
   });
 
+  it('拒绝使用 XML 命名空间前缀嵌入活动内容的 SVG 资源', async () => {
+    await writeFile(
+      join(rootDir, 'knowledge/note.md'),
+      knowledgeMarkdown(['assets/unsafe.svg'], '![图](assets/unsafe.svg)'),
+    );
+    const unsafeElements = [
+      '<active:script xmlns:active="http://www.w3.org/2000/svg">alert(1)</active:script>',
+      '<图形:script xmlns:图形="http://www.w3.org/2000/svg">alert(1)</图形:script>',
+      '<active:foreignObject xmlns:active="http://www.w3.org/2000/svg" />',
+      '<active:style xmlns:active="http://www.w3.org/2000/svg">.shape { display: none }</active:style>',
+      '<active:animate xmlns:active="http://www.w3.org/2000/svg" attributeName="opacity" />',
+    ];
+
+    for (const unsafeElement of unsafeElements) {
+      await writeFile(
+        join(rootDir, 'assets/unsafe.svg'),
+        `<svg xmlns="http://www.w3.org/2000/svg">${unsafeElement}</svg>`,
+      );
+
+      const result = await validateQuestionBankDirectory(rootDir);
+
+      expect(result.valid).toBe(false);
+      expect(result.diagnostics).toContainEqual(
+        expect.objectContaining({
+          code: 'OQB-SECURITY-003',
+          severity: 'error',
+          entityId: 'knowledge-asset',
+        }),
+      );
+    }
+  });
+
   it('共享 SVG 的安全诊断关联到每个引用实体', async () => {
     await writeFile(
       join(rootDir, 'knowledge/note.md'),

@@ -574,16 +574,18 @@ function unsafeSvgContentIssue(source: string): string | undefined {
   if (/<!\s*(?:doctype|entity)\b|<\?xml-stylesheet\b|\bxml:base\s*=/i.test(source)) {
     return 'SVG 包含不允许的文档类型、实体或外部样式声明';
   }
-  if (/<\s*(?:script|foreignObject|iframe|object|embed)\b/i.test(source)) {
+  if (/<\s*(?:[^\s<>/:]+:)?(?:script|foreignObject|iframe|object|embed)\b/i.test(source)) {
     return 'SVG 包含脚本或可嵌入活动内容的元素';
   }
   if (/\bon[a-z][a-z0-9_.:-]*\s*=/i.test(source)) {
     return 'SVG 包含事件处理属性';
   }
-  if (/<\s*style\b|\bstyle\s*=/i.test(source)) {
+  if (/<\s*(?:[^\s<>/:]+:)?style\b|\bstyle\s*=/i.test(source)) {
     return 'SVG 不允许包含 CSS 样式';
   }
-  if (/<\s*(?:animate|animateMotion|animateTransform|set|discard)\b/i.test(source)) {
+  if (
+    /<\s*(?:[^\s<>/:]+:)?(?:animate|animateMotion|animateTransform|set|discard)\b/i.test(source)
+  ) {
     return 'SVG 不允许包含动画元素';
   }
 
