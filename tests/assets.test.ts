@@ -91,6 +91,28 @@ describe('Core 资源校验', () => {
     expect(result.diagnostics.some(({ code }) => code === 'OQB-ASSET-001')).toBe(true);
   });
 
+  it('拒绝包含事件处理器的 SVG 资源', async () => {
+    await writeFile(
+      join(rootDir, 'knowledge/note.md'),
+      knowledgeMarkdown(['assets/unsafe.svg'], '![图](assets/unsafe.svg)'),
+    );
+    await writeFile(
+      join(rootDir, 'assets/unsafe.svg'),
+      '<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"><path d="M0 0"/></svg>',
+    );
+
+    const result = await validateQuestionBankDirectory(rootDir);
+
+    expect(result.valid).toBe(false);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'OQB-SECURITY-003',
+        severity: 'error',
+        entityId: 'knowledge-asset',
+      }),
+    );
+  });
+
   it('忽略外部链接和代码片段中的示例链接', async () => {
     await writeFile(
       join(rootDir, 'knowledge/note.md'),

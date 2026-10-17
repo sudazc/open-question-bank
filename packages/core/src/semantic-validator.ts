@@ -7,6 +7,7 @@ import type {
   Topic,
 } from '@openquestionbank/schema';
 import type { Diagnostic } from './diagnostics.js';
+import { getExamRuleCandidates } from './exam-rules.js';
 import type { LocatedEntity, LocatedQuestionBank } from './types.js';
 
 /** 检查结构有效实体之间的引用、树关系、答案关系和组卷关系 */
@@ -330,6 +331,8 @@ function validateExamReferences(
   exams: EntityMap<Exam>,
   diagnostics: Diagnostic[],
 ): void {
+  const questionValues = [...questions.values()].map(({ value }) => value);
+  const groupValues = [...groups.values()].map(({ value }) => value);
   for (const exam of exams.values()) {
     const value = exam.value;
     if ('items' in value) {
@@ -351,51 +354,13 @@ function validateExamReferences(
     }
 
     value.rules.forEach((rule, ruleIndex) => {
-      const filters = rule.filters;
-      if (rule.unit === 'question') {
-        const matchingQuestions = [...questions.values()].filter(({ value: question }) => {
-          const matchesTopic =
-            !filters?.topicIds || filters.topicIds.some((id) => question.topicIds.includes(id));
-          const matchesType =
-            !filters?.questionTypes || filters.questionTypes.includes(question.type);
-          const matchesDifficulty =
-            filters?.difficulty === undefined || question.difficulty === filters.difficulty;
-          return matchesTopic && matchesType && matchesDifficulty;
-        });
-        reportInsufficientCandidates(
-          exam,
-          ruleIndex,
-          rule.count,
-          matchingQuestions.length,
-          '题目',
-          diagnostics,
-        );
-        return;
-      }
-
-      const matchingGroups = [...groups.values()].filter(({ value: group }) => {
-        const matchesTopic =
-          !filters?.topicIds || filters.topicIds.some((id) => group.topicIds.includes(id));
-        const memberQuestions = group.questionIds.map((id) => questions.get(id)?.value);
-        const allMembersExist = memberQuestions.every((question) => question !== undefined);
-        const matchesType =
-          !filters?.questionTypes ||
-          memberQuestions.every(
-            (question) => question !== undefined && filters.questionTypes?.includes(question.type),
-          );
-        const matchesDifficulty =
-          filters?.difficulty === undefined ||
-          memberQuestions.every(
-            (question) => question !== undefined && question.difficulty === filters.difficulty,
-          );
-        return matchesTopic && allMembersExist && matchesType && matchesDifficulty;
-      });
+      const matchingCandidates = getExamRuleCandidates(rule, questionValues, groupValues);
       reportInsufficientCandidates(
         exam,
         ruleIndex,
         rule.count,
-        matchingGroups.length,
-        '题组',
+        matchingCandidates.length,
+        rule.unit === 'question' ? '题目' : '题组',
         diagnostics,
       );
     });

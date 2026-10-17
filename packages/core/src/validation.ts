@@ -1,4 +1,5 @@
 import { hasBlockingDiagnostics, type Diagnostic } from './diagnostics.js';
+import { validateContentSecurity } from './content-security-validator.js';
 import { buildEntityIndex, type EntityIndex } from './entity-index.js';
 import {
   loadQuestionBank,
@@ -7,6 +8,7 @@ import {
   type ParsedQuestionBank,
 } from './loader.js';
 import { applyPublicationPolicy, type ValidationMode } from './publication-validator.js';
+import { validateContentQuality } from './quality-validator.js';
 import { validateSemantics } from './semantic-validator.js';
 import { validateEntity, type EntityKind, type EntityTypeMap } from './schema-validator.js';
 import type { LocatedEntity, LocatedQuestionBank, QuestionBankData } from './types.js';
@@ -51,6 +53,8 @@ export function validateQuestionBank(
   if (mode === 'release') {
     removeExcludedAssetDiagnostics(located, publishable, diagnostics);
   }
+  validateContentSecurity(publishable, diagnostics);
+  validateContentQuality(publishable, diagnostics);
   validateSemantics(publishable, diagnostics);
   const data: QuestionBankData = {
     ...(publishable.bank === undefined ? {} : { bank: publishable.bank.value }),

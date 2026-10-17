@@ -82,6 +82,47 @@ describe('OpenQuestionBank CLI', () => {
     expect(stdout.join('\n')).toContain('bank.yaml 已加载');
   });
 
+  it('使用随机种子构建规则组卷结果且不改写源模板', async () => {
+    const bankDir = join(rootDir, 'bank');
+    const exportDir = join(rootDir, 'dist', 'bank');
+    await runCli(['init', bankDir], output);
+    const templateFile = join(bankDir, 'exams', 'generated.yaml');
+    const template = [
+      'id: exam-generated',
+      'title: 练习试卷',
+      'mode: generated',
+      'kind: template',
+      'rules:',
+      '  - unit: question',
+      '    count: 1',
+      '    scorePerQuestion: 2',
+    ].join('\n');
+    await writeFile(templateFile, template);
+
+    const missingSeedExitCode = await runCli(['build', bankDir, '--out', exportDir], output);
+    const buildExitCode = await runCli(
+      ['build', bankDir, '--seed', 'review-run-1', '--out', exportDir],
+      output,
+    );
+    const exported = JSON.parse(await readFile(join(exportDir, 'question-bank.json'), 'utf8'));
+    const generatedExam = exported.data.exams.find(
+      (exam: { id: string }) => exam.id === 'exam-generated',
+    );
+
+    expect(missingSeedExitCode).toBe(2);
+    expect(buildExitCode).toBe(0);
+    expect(generatedExam).toMatchObject({
+      mode: 'generated',
+      kind: 'result',
+      randomSeed: 'review-run-1',
+      bankVersion: '0.1.0',
+      items: [{ kind: 'question', questionId: 'question-example', score: 2 }],
+    });
+    expect(await readFile(templateFile, 'utf8')).toBe(template);
+    expect(stdout.join('\n')).toContain('已按种子生成规则试卷：1 份');
+    expect(stdout.join('\n')).toContain('JSON 构建完成');
+  });
+
   it('校验后生成标准 JSON 数据包和可复现清单', async () => {
     const bankDir = join(rootDir, 'bank');
     const exportDir = join(rootDir, 'dist', 'bank');

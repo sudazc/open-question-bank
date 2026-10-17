@@ -5,6 +5,8 @@ import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 import {
+  ExamGenerationError,
+  generateExam,
   validateQuestionBankDirectory,
   type Diagnostic,
   type ValidationMode,
@@ -47,6 +49,7 @@ export async function runCli(
         mode: { type: 'string', short: 'm' },
         format: { type: 'string', short: 'f' },
         out: { type: 'string', short: 'o' },
+        seed: { type: 'string', short: 's' },
       },
       allowPositionals: true,
       strict: true,
@@ -90,13 +93,32 @@ export async function runCli(
     output.stderr('--format 必须指定 json、github-markdown、obsidian 或 notion');
     return 2;
   }
-  if (command !== 'export' && formatValue !== undefined) {
-    output.stderr('--format 仅用于 export 命令');
+  if (command !== 'export' && command !== 'build' && formatValue !== undefined) {
+    output.stderr('--format 仅用于 export 和 build 命令');
     return 2;
   }
   if (command === 'export' && formatValue !== undefined && !isExportFormat(formatValue)) {
     output.stderr(`暂不支持导出格式：${formatValue}`);
     output.stderr(`当前可用格式：${exportFormats.join('、')}`);
+    return 2;
+  }
+  if (command === 'build' && formatValue !== undefined && !isExportFormat(formatValue)) {
+    output.stderr(`暂不支持构建格式：${formatValue}`);
+    output.stderr(`当前可用格式：${exportFormats.join('、')}`);
+    return 2;
+  }
+
+  const seedValue = values.seed;
+  if (seedValue !== undefined && typeof seedValue !== 'string') {
+    output.stderr('--seed 必须指定随机种子');
+    return 2;
+  }
+  if (seedValue !== undefined && command !== 'build') {
+    output.stderr('--seed 仅用于 build 命令');
+    return 2;
+  }
+  if (seedValue !== undefined && (seedValue.trim() === '' || [...seedValue].length > 128)) {
+    output.stderr('--seed 必须为 1 至 128 个非空字符');
     return 2;
   }
 
@@ -105,8 +127,8 @@ export async function runCli(
     output.stderr('--out 必须指定输出目录');
     return 2;
   }
-  if (command !== 'export' && outputDirectory !== undefined) {
-    output.stderr('--out 仅用于 export 命令');
+  if (command !== 'export' && command !== 'build' && outputDirectory !== undefined) {
+    output.stderr('--out 仅用于 export 和 build 命令');
     return 2;
   }
   if (outputDirectory !== undefined && outputDirectory.trim() === '') {
@@ -133,6 +155,18 @@ export async function runCli(
           isExportFormat(formatValue) ? formatValue : 'json',
           outputDirectory ?? 'dist',
           output,
+        );
+      case 'build':
+        return await exportCommand(
+          directory,
+          mode,
+          isExportFormat(formatValue) ? formatValue : 'json',
+          outputDirectory ?? 'dist',
+          output,
+          {
+            generateExamResults: true,
+            ...(seedValue === undefined ? {} : { randomSeed: seedValue }),
+          },
         );
       default:
         output.stderr(`未知命令：${command}`);
@@ -270,10 +304,15 @@ async function exportCommand(
   format: (typeof exportFormats)[number],
   outputDirectory: string,
   output: CliOutput,
+  buildOptions: { generateExamResults: boolean; randomSeed?: string } = {
+    generateExamResults: false,
+  },
 ): Promise<number> {
   const root = resolve(directory);
   const result = await validateQuestionBankDirectory(root, { mode });
-  output.stdout(`导出题库：${result.data.bank?.name ?? root}`);
+  output.stdout(
+    `${buildOptions.generateExamResults ? '构建' : '导出'}题库：${result.data.bank?.name ?? root}`,
+  );
   printValidationSummary(result.data, result.diagnostics, result.valid, mode, output);
   printDiagnostics(result.diagnostics, output);
   if (!result.valid) {
@@ -285,28 +324,62 @@ async function exportCommand(
     return 1;
   }
 
+  let data = result.data;
+  if (buildOptions.generateExamResults) {
+    const templates = data.exams.filter((exam) => 'rules' in exam);
+    if (templates.length > 0 && buildOptions.randomSeed === undefined) {
+      output.stderr('题库包含规则组卷模板；请使用 --seed <随机种子> 生成可复现试卷');
+      return 2;
+    }
+    if (templates.length > 0 && buildOptions.randomSeed !== undefined) {
+      try {
+        const randomSeed = buildOptions.randomSeed;
+        const generatedById = new Map(
+          templates.map((template) => [template.id, generateExam(data, template.id, randomSeed)]),
+        );
+        data = {
+          ...data,
+          exams: data.exams.map((exam) => generatedById.get(exam.id) ?? exam),
+        };
+        output.stdout(`已按种子生成规则试卷：${templates.length} 份`);
+      } catch (error) {
+        if (error instanceof ExamGenerationError) {
+          output.stderr(`[${error.code}] ${error.message}`);
+          return 1;
+        }
+        throw error;
+      }
+    } else if (buildOptions.randomSeed !== undefined) {
+      output.stdout('题库没有规则组卷模板，未使用随机种子');
+    }
+  }
+
   if (format === 'github-markdown') {
-    const exported = await writeQuestionBankGithubMarkdownExport(
-      result.data,
-      root,
-      outputDirectory,
+    const exported = await writeQuestionBankGithubMarkdownExport(data, root, outputDirectory);
+    output.stdout(
+      `GitHub Markdown ${buildOptions.generateExamResults ? '构建' : '导出'}完成：${exported.outputDirectory}`,
     );
-    output.stdout(`GitHub Markdown 导出完成：${exported.outputDirectory}`);
     output.stdout(`入口文件：${join(exported.outputDirectory, 'README.md')}`);
     output.stdout(`发布清单：${join(exported.outputDirectory, 'manifest.json')}`);
   } else if (format === 'obsidian') {
-    const exported = await writeQuestionBankObsidianVaultExport(result.data, root, outputDirectory);
-    output.stdout(`Obsidian Vault 导出完成：${exported.outputDirectory}`);
+    const exported = await writeQuestionBankObsidianVaultExport(data, root, outputDirectory);
+    output.stdout(
+      `Obsidian Vault ${buildOptions.generateExamResults ? '构建' : '导出'}完成：${exported.outputDirectory}`,
+    );
     output.stdout(`入口文件：${join(exported.outputDirectory, '题库首页.md')}`);
     output.stdout(`发布清单：${join(exported.outputDirectory, 'manifest.json')}`);
   } else if (format === 'notion') {
-    const exported = await writeQuestionBankNotionExport(result.data, root, outputDirectory);
-    output.stdout(`Notion 导入包导出完成：${exported.outputDirectory}`);
+    const exported = await writeQuestionBankNotionExport(data, root, outputDirectory);
+    output.stdout(
+      `Notion 导入包${buildOptions.generateExamResults ? '构建' : '导出'}完成：${exported.outputDirectory}`,
+    );
     output.stdout(`导入说明：${join(exported.outputDirectory, 'README.md')}`);
     output.stdout(`发布清单：${join(exported.outputDirectory, 'manifest.json')}`);
   } else {
-    const exported = await writeQuestionBankJsonExport(result.data, root, outputDirectory);
-    output.stdout(`JSON 导出完成：${exported.outputDirectory}`);
+    const exported = await writeQuestionBankJsonExport(data, root, outputDirectory);
+    output.stdout(
+      `JSON ${buildOptions.generateExamResults ? '构建' : '导出'}完成：${exported.outputDirectory}`,
+    );
     output.stdout(`数据文件：${join(exported.outputDirectory, 'question-bank.json')}`);
     output.stdout(`发布清单：${join(exported.outputDirectory, 'manifest.json')}`);
   }
@@ -396,6 +469,7 @@ function printHelp(output: CliOutput): void {
   oqb stats [目录] [--mode draft|strict|release]
   oqb doctor [目录] [--mode draft|strict|release]
   oqb export [目录] [--format json|github-markdown|obsidian|notion] [--out <目录>] [--mode draft|strict|release]
+  oqb build [目录] [--format json|github-markdown|obsidian|notion] [--out <目录>] [--mode draft|strict|release] [--seed <随机种子>]
   oqb --help
 
 命令：
@@ -404,11 +478,13 @@ function printHelp(output: CliOutput): void {
   stats     统计当前模式下保留的有效题库实体
   doctor    检查 Node.js 环境、bank.yaml 和题库校验结果
   export    校验题库后生成 JSON、GitHub Markdown、Obsidian Vault 或 Notion 导入包
+  build     构建所选格式；题库含规则组卷模板时使用 --seed 生成试卷结果
 
 选项：
   -m, --mode <模式>  校验模式，默认为 draft
   -f, --format <格式> 导出格式，支持 json、github-markdown、obsidian、notion
   -o, --out <目录>   导出目录，默认为当前目录下的 dist
+  -s, --seed <种子>  build 中用于可复现规则组卷的随机种子
   -h, --help         显示帮助信息
 
 校验模式：

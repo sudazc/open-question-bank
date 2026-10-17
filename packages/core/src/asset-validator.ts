@@ -1,5 +1,6 @@
-import { lstat, realpath } from 'node:fs/promises';
+import { lstat, open, realpath } from 'node:fs/promises';
 import { relative, resolve, sep } from 'node:path';
+import { TextDecoder } from 'node:util';
 import type { Diagnostic } from './diagnostics.js';
 
 interface AssetEntity {
@@ -148,6 +149,20 @@ export async function validateAssetReferences(
       checkedPaths.add(path);
       const result = await inspectAssetFile(canonicalRoot, path);
       if (result === 'valid') {
+        if (path.toLowerCase().endsWith('.svg')) {
+          const svgIssue = await inspectSvgContent(canonicalRoot, path);
+          if (svgIssue) {
+            addAssetDiagnostic(
+              diagnostics,
+              entry.file,
+              entry.entityId,
+              'OQB-SECURITY-003',
+              svgIssue,
+              entry.fieldPath,
+              '移除 SVG 中的脚本、事件、外部引用、样式和实体声明，保留静态路径与图形元素',
+            );
+          }
+        }
         continue;
       }
       const unsafe = result === 'unsafe';
@@ -314,8 +329,8 @@ function addAssetDiagnostic(
   });
 }
 
-function extractMarkdownDestinations(markdown: string): string[] {
-  const source = maskCode(markdown);
+export function extractMarkdownDestinations(markdown: string): string[] {
+  const source = maskMarkdownCode(markdown);
   const referencePattern =
     /^[ \t]{0,3}\[([^\]\n]+)\]:[ \t]*(?:<([^>\n]*)>|((?:\\.|[^ \t\r\n])+))/gm;
   const references = new Map<string, string>();
@@ -408,7 +423,7 @@ function normalizeReferenceLabel(value: string): string {
   return value.trim().replace(/\s+/g, ' ').toLowerCase();
 }
 
-function maskCode(markdown: string): string {
+export function maskMarkdownCode(markdown: string): string {
   const characters = markdown.split('');
   let lineStart = 0;
   let fence: { marker: string; length: number } | undefined;
@@ -473,6 +488,78 @@ function maskCode(markdown: string): string {
     runIndex = closingRunIndex;
   }
   return characters.join('');
+}
+
+async function inspectSvgContent(
+  canonicalRoot: string,
+  relativePath: string,
+): Promise<string | undefined> {
+  const fullPath = resolve(canonicalRoot, ...relativePath.split('/'));
+  let file;
+  try {
+    const metadata = await lstat(fullPath);
+    if (metadata.isSymbolicLink() || !metadata.isFile()) {
+      return undefined;
+    }
+    if (metadata.size > 2_097_152) {
+      return `SVG 文件大小 ${metadata.size} 字节，超过安全检查限制 2097152 字节：${relativePath}`;
+    }
+    file = await open(fullPath, 'r');
+    const openedMetadata = await file.stat();
+    if (
+      !openedMetadata.isFile() ||
+      openedMetadata.dev !== metadata.dev ||
+      openedMetadata.ino !== metadata.ino
+    ) {
+      return `SVG 文件在检查期间发生变化：${relativePath}`;
+    }
+    const canonicalPath = await realpath(fullPath);
+    if (!isContained(canonicalRoot, canonicalPath)) {
+      return undefined;
+    }
+    const bytes = Buffer.alloc(2_097_153);
+    const { bytesRead } = await file.read(bytes, 0, bytes.length, 0);
+    if (bytesRead > 2_097_152) {
+      return `SVG 文件超过安全检查限制 2097152 字节：${relativePath}`;
+    }
+    const source = new TextDecoder('utf-8', { fatal: true }).decode(bytes.subarray(0, bytesRead));
+    return unsafeSvgContentIssue(source);
+  } catch {
+    return `SVG 文件无法读取或不是有效的 UTF-8 文本：${relativePath}`;
+  } finally {
+    await file?.close();
+  }
+}
+
+function unsafeSvgContentIssue(source: string): string | undefined {
+  if (/<!\s*(?:doctype|entity)\b|<\?xml-stylesheet\b|\bxml:base\s*=/i.test(source)) {
+    return 'SVG 包含不允许的文档类型、实体或外部样式声明';
+  }
+  if (/<\s*(?:script|foreignObject|iframe|object|embed)\b/i.test(source)) {
+    return 'SVG 包含脚本或可嵌入活动内容的元素';
+  }
+  if (/\bon[a-z][a-z0-9_.:-]*\s*=/i.test(source)) {
+    return 'SVG 包含事件处理属性';
+  }
+  if (/<\s*style\b|\bstyle\s*=/i.test(source)) {
+    return 'SVG 不允许包含 CSS 样式';
+  }
+  if (/<\s*(?:animate|animateMotion|animateTransform|set|discard)\b/i.test(source)) {
+    return 'SVG 不允许包含动画元素';
+  }
+
+  for (const match of source.matchAll(
+    /\b(?:href|xlink:href|src)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/gi,
+  )) {
+    const target = (match[1] ?? match[2] ?? match[3] ?? '').trim();
+    if (target !== '' && !target.startsWith('#')) {
+      return 'SVG 只能使用内部片段引用，不能加载外部或内嵌资源';
+    }
+  }
+  if (/\burl\(\s*(?!['"]?#)/i.test(source)) {
+    return 'SVG 的 url() 只能引用同一文件中的片段';
+  }
+  return undefined;
 }
 
 function maskRange(characters: string[], start: number, end: number): void {

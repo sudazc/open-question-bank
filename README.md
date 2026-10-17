@@ -4,7 +4,7 @@ OpenQuestionBank 是一个面向 AI 协作构建题库的开源格式与本地�
 
 本项目提供数据格式、AI 构建指南、题库模板、命令行校验和导出工具。AI 助手负责需求沟通、资料整理和题目编写；OpenQuestionBank 负责把生成的内容组织成可维护的 YAML / Markdown 源文件、发现格式和引用问题，并按需导出为可导入 Obsidian 或 Notion 的文件包。题库内容可通过 Git 版本管理、审阅和协作。
 
-项目目前进入 V1.0 的 P3 阶段：Schema 1.0、Core 读取与校验、题库初始化模板、CLI 校验 / 统计 / 诊断、标准 JSON、GitHub Markdown 阅读包、Obsidian Vault 和 Notion CSV / Markdown 导入包已实现。规则组卷执行、自动评分、在线刷题和学习记录尚未实现。
+V1.0 基础能力已实现：Schema、Core 读取与校验、题库初始化模板、CLI 校验 / 统计 / 诊断、规则组卷、标准 JSON、GitHub Markdown、Obsidian Vault 和 Notion CSV / Markdown 导入包。自动评分、在线刷题和学习记录尚未实现。
 
 ## 适合什么场景
 
@@ -76,6 +76,7 @@ pnpm oqb init ./my-question-bank
 pnpm oqb validate ./my-question-bank
 pnpm oqb stats ./my-question-bank
 pnpm oqb doctor ./my-question-bank
+pnpm oqb build ./my-question-bank --out ./dist/my-question-bank
 pnpm oqb export ./my-question-bank --format json --out ./dist/my-question-bank
 pnpm oqb export ./my-question-bank --format github-markdown --out ./dist/my-question-bank-github
 pnpm oqb export ./my-question-bank --format obsidian --out ./dist/my-question-bank-obsidian
@@ -192,11 +193,14 @@ review:
 
 三种模式的校验细节见 [Core 使用说明](docs/core.md)。非原创来源缺少来源链接或链接不是 HTTP / HTTPS 时会显示警告；Core 不联网检查链接可访问性。`release` 检查许可证和署名信息是否填写，不会判断许可证法律效力或许可证之间的兼容性。官方公开资料不自动代表允许转载。
 
+Core 会拒绝 Markdown 中的活动 HTML、脚本协议链接和包含活动内容的 SVG。正文可使用 `br`、`hr`、`sub`、`sup`、`kbd`、`mark`、`details`、`summary` 这些安全标签；代码块中的脚本示例不会触发安全诊断。质量检查会拒绝只含空白字符的必填文本，并对完全重复的题干发出警告；内容准确性、难度和干扰项质量仍需人工审核。
+
 ## CLI 命令
 
 ```text
 oqb init [目录]
 oqb validate [目录] [--mode draft|strict|release]
+oqb build [目录] [--format json|github-markdown|obsidian|notion] [--out <目录>] [--mode draft|strict|release] [--seed <随机种子>]
 oqb stats [目录] [--mode draft|strict|release]
 oqb doctor [目录] [--mode draft|strict|release]
 oqb export [目录] [--format json|github-markdown|obsidian|notion] [--out <目录>] [--mode draft|strict|release]
@@ -204,12 +208,24 @@ oqb export [目录] [--format json|github-markdown|obsidian|notion] [--out <目�
 
 - `init` 从仓库模板创建题库。省略目录时使用当前目录；目标目录必须不存在或为空。
 - `validate` 打印错误、警告、文件位置和修复建议。错误或致命错误使命令以退出码 `1` 结束。
+- `build` 校验后构建所选格式；题库包含规则组卷模板时，必须使用 `--seed` 生成实际试卷。结果只写入构建输出，不改写题库源文件。
 - `stats` 按指定模式统计考点、知识、题目、题组和试卷；统计的是校验器保留的结构有效实体。
 - `doctor` 检查 Node.js 版本、`bank.yaml` 加载结果和题库校验状态。
 - `export` 先校验题库，再按所选格式生成数据包和 `manifest.json`。格式默认为 `json`，也可以选择 `github-markdown`、`obsidian` 或 `notion`。输出目录默认为命令运行目录下的 `dist`；也可以使用 `--out` 指定路径。`--mode release` 只导出通过发布筛选和最终引用校验的数据。
 - 未知命令、参数错误或执行错误使用退出码 `2`；通过使用退出码 `0`。警告不会单独导致校验失败。
 
 所有命令支持 `--help`，目录参数默认为当前目录。CLI 不要求交互输入，可用于本地脚本或 CI。
+
+### 构建规则组卷并导出
+
+`build` 会先校验题库，再生成所选格式的导入包。题库中的规则组卷模板会在构建副本中替换为实际试卷结果；源目录中的 YAML 文件不会修改。若题库包含规则模板，必须提供 `--seed`，生成结果会记录随机种子、题库版本和算法版本。同一份题库、模板和种子会生成相同的题目及顺序。
+
+```sh
+pnpm oqb build ./my-question-bank --seed practice-001 --format obsidian --out ./dist/practice-001
+pnpm oqb build ./my-question-bank --seed practice-001 --format notion --out ./dist/notion-practice-001
+```
+
+`--format` 默认为 `json`，也可选择 `github-markdown`、`obsidian` 或 `notion`。没有规则组卷模板时，`--seed` 可省略。规则之间不会重复抽取题目；题组作为整体抽取，并按模板分值为每道子题设置分数。由于规则筛选结果可能重叠，单条规则候选充足仍不保证跨规则组合足够；发生冲突时，构建会报出具体规则和剩余候选数，不会减少题量。
 
 ### 导出标准 JSON
 
@@ -292,9 +308,9 @@ Schema 检查单个实体的字段结构；重复 ID、引用目标是否存在�
 
 ## 当前能力边界
 
-已实现：Schema 1.0、YAML / Markdown 读取、结构和语义校验、资源检查、题库索引、审核授权模式、初始化模板、CLI 校验 / 统计 / 诊断、标准 JSON 导出、GitHub Markdown 阅读包、Obsidian Vault、Notion CSV / Markdown 导入包和发布清单。
+已实现：Schema 1.0、YAML / Markdown 读取、结构和语义校验、资源检查、题库索引、审核授权模式、初始化模板、确定性规则组卷、CLI 构建 / 校验 / 统计 / 诊断、标准 JSON 导出、GitHub Markdown 阅读包、Obsidian Vault、Notion CSV / Markdown 导入包和发布清单。
 
-尚未实现：规则组卷执行、自动评分、质量审核规则、在线刷题、账号、数据库和学习记录。项目架构和职责边界见 [架构说明](docs/architecture.md)。
+尚未实现：自动评分、完整的内容质量审核规则、在线刷题、账号、数据库和学习记录。项目架构和职责边界见 [架构说明](docs/architecture.md)。
 
 ## 开发与贡献
 

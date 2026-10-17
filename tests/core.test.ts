@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
+  generateExam,
   parseMarkdownDocument,
   parseYamlDocument,
   validateQuestionBankDirectory,
@@ -214,6 +215,161 @@ describe('OpenQuestionBank Core', () => {
     expect(codes).toContain('OQB-EXAM-003');
   });
 
+  it('按随机种子生成可复现且不重复的题目与完整题组', async () => {
+    await writeFile(join(rootDir, 'questions/three.yaml'), questionYaml('q-three', 'k-one'));
+    await writeFile(join(rootDir, 'questions/four.yaml'), questionYaml('q-four', 'k-two'));
+    await writeFile(
+      join(rootDir, 'groups/second.yaml'),
+      [
+        'id: group-second',
+        'title: 第二组材料题',
+        'passage: 第二份共享材料',
+        'questionIds: [q-three, q-four]',
+        'topicIds: [topic-child]',
+        'source: { type: original }',
+        'review: { status: draft }',
+      ].join('\n'),
+    );
+    await writeFile(
+      join(rootDir, 'exams/generated.yaml'),
+      [
+        'id: exam-generated',
+        'title: 规则组卷',
+        'mode: generated',
+        'kind: template',
+        'rules:',
+        '  - unit: question',
+        '    count: 1',
+        '    scorePerQuestion: 2',
+        '  - unit: group',
+        '    count: 1',
+        '    scorePerQuestion: 1',
+      ].join('\n'),
+    );
+
+    const validated = await validateQuestionBankDirectory(rootDir);
+    const first = generateExam(validated.data, 'exam-generated', 'repeatable-seed');
+    const second = generateExam(validated.data, 'exam-generated', 'repeatable-seed');
+
+    expect(validated.valid).toBe(true);
+    expect(first).toEqual(second);
+    expect(first).toMatchObject({
+      mode: 'generated',
+      kind: 'result',
+      randomSeed: 'repeatable-seed',
+      bankVersion: '1.0.0',
+      algorithmVersion: '1.0.0',
+      items: [
+        { kind: 'question', score: 2 },
+        { kind: 'group', questions: [{ score: 1 }, { score: 1 }] },
+      ],
+    });
+    const selectedQuestion = first.items[0];
+    const selectedGroup = first.items[1];
+    expect(selectedQuestion?.kind).toBe('question');
+    expect(selectedGroup?.kind).toBe('group');
+    if (selectedQuestion?.kind === 'question' && selectedGroup?.kind === 'group') {
+      expect(selectedGroup.questions.map(({ questionId }) => questionId)).not.toContain(
+        selectedQuestion.questionId,
+      );
+    }
+  });
+
+  it('对脚本 HTML 和危险链接报错并忽略代码示例', async () => {
+    const note = knowledgeMarkdown('k-one', '', '').replace(
+      '正文和引用 [关联知识](oqb://knowledge/)。',
+      [
+        '允许的折叠内容 <details><summary>提示</summary>正文</details>。',
+        '[安全链接](https://example.com)',
+        '<https://example.com>',
+        '[危险链接](javascript:alert(1))',
+        '<script>alert(1)</script>',
+        '```html',
+        '<script>仅作示例</script>',
+        '```',
+      ].join('\n'),
+    );
+    await writeFile(join(rootDir, 'knowledge/one.md'), note);
+
+    const result = await validateQuestionBankDirectory(rootDir);
+
+    expect(result.valid).toBe(false);
+    expect(result.diagnostics.map(({ code }) => code)).toContain('OQB-SECURITY-001');
+    expect(result.diagnostics.map(({ code }) => code)).toContain('OQB-SECURITY-002');
+  });
+
+  it('报告空白题干错误和完全重复题干警告', async () => {
+    await writeFile(
+      join(rootDir, 'questions/one.yaml'),
+      questionYaml('q-one', 'k-one').replace('该陈述 q-one 是否正确？', '"   "'),
+    );
+    await writeFile(
+      join(rootDir, 'questions/two.yaml'),
+      questionYaml('q-two', 'k-two').replace('该陈述 q-two 是否正确？', '与题一相同'),
+    );
+    await writeFile(
+      join(rootDir, 'questions/duplicate.yaml'),
+      questionYaml('q-duplicate', 'k-one').replace('该陈述 q-duplicate 是否正确？', '与题一相同'),
+    );
+
+    const result = await validateQuestionBankDirectory(rootDir);
+
+    expect(result.valid).toBe(false);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'OQB-QUALITY-001',
+        severity: 'error',
+        entityId: 'q-one',
+        fieldPath: 'stem',
+      }),
+    );
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'OQB-QUALITY-002',
+        severity: 'warning',
+        entityId: 'q-two',
+        fieldPath: 'stem',
+      }),
+    );
+  });
+
+  it('生成时报告多条规则之间的候选冲突', async () => {
+    await writeFile(
+      join(rootDir, 'questions/only-advanced.yaml'),
+      questionYaml('q-advanced', 'k-one').replace('difficulty: 入门', 'difficulty: 高级'),
+    );
+    await writeFile(
+      join(rootDir, 'exams/conflict.yaml'),
+      [
+        'id: exam-conflict',
+        'title: 冲突规则',
+        'mode: generated',
+        'kind: template',
+        'rules:',
+        '  - unit: question',
+        '    count: 1',
+        '    scorePerQuestion: 1',
+        '    filters: { difficulty: 高级 }',
+        '  - unit: question',
+        '    count: 1',
+        '    scorePerQuestion: 1',
+        '    filters: { difficulty: 高级 }',
+      ].join('\n'),
+    );
+
+    const validated = await validateQuestionBankDirectory(rootDir);
+
+    expect(validated.valid).toBe(true);
+    expect(() => generateExam(validated.data, 'exam-conflict', 'repeatable-seed')).toThrow(
+      expect.objectContaining({
+        code: 'INSUFFICIENT_CANDIDATES',
+        ruleIndex: 1,
+        requiredCount: 1,
+        availableCount: 0,
+      }),
+    );
+  });
+
   it('将 Schema 结构错误定位到文件和字段', async () => {
     await writeFile(
       join(rootDir, 'questions/one.yaml'),
@@ -326,7 +482,7 @@ function questionYaml(id: string, knowledgeId: string, answer = 'answer: true'):
   return [
     `id: ${id}`,
     'type: true_false',
-    'stem: 该陈述是否正确？',
+    `stem: 该陈述 ${id} 是否正确？`,
     answer,
     'topicIds: [topic-child]',
     `knowledgeIds: [${knowledgeId}]`,
