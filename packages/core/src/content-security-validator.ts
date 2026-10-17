@@ -186,7 +186,7 @@ function isSafeHtmlTag(tag: string): boolean {
 }
 
 function isUnsafeDestination(destination: string): boolean {
-  const decoded = decodeRelevantHtmlEntities(destination);
+  const decoded = decodeRelevantHtmlEntities(decodeMarkdownBackslashEscapes(destination));
   let compact = '';
   for (const character of decoded) {
     const codePoint = character.codePointAt(0) ?? 0;
@@ -196,6 +196,10 @@ function isUnsafeDestination(destination: string): boolean {
   }
   const normalized = compact.toLowerCase();
   return /^(?:javascript|vbscript|data):/.test(normalized);
+}
+
+function decodeMarkdownBackslashEscapes(value: string): string {
+  return value.replace(/\\([\u0021-\u002f\u003a-\u0040\u005b-\u0060\u007b-\u007e])/g, '$1');
 }
 
 function decodeRelevantHtmlEntities(value: string): string {

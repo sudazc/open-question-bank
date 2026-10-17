@@ -581,6 +581,26 @@ describe('OpenQuestionBank Core', () => {
     expect(result.diagnostics.map(({ code }) => code)).toContain('OQB-SECURITY-002');
   });
 
+  it('拒绝通过 Markdown 反斜杠转义绕过脚本协议检查的链接', async () => {
+    const destinations = [
+      '[危险行内链接](javascript\\:alert(1))',
+      '[危险引用链接][script]\n\n[script]: javascript\\:alert(1)',
+    ];
+
+    for (const destination of destinations) {
+      const note = knowledgeMarkdown('k-one', '', '').replace(
+        '正文和引用 [关联知识](oqb://knowledge/)。',
+        destination,
+      );
+      await writeFile(join(rootDir, 'knowledge/one.md'), note);
+
+      const result = await validateQuestionBankDirectory(rootDir);
+
+      expect(result.valid).toBe(false);
+      expect(result.diagnostics.map(({ code }) => code)).toContain('OQB-SECURITY-002');
+    }
+  });
+
   it('不会将反斜杠转义的反引号内容误判为代码示例', async () => {
     const note = knowledgeMarkdown('k-one', '', '').replace(
       '正文和引用 [关联知识](oqb://knowledge/)。',
