@@ -919,6 +919,25 @@ describe('OpenQuestionBank Core', () => {
   it('拒绝循环 YAML 别名', () => {
     expect(() => parseYamlDocument('loop: &loop\n  self: *loop')).toThrow('循环别名');
   });
+
+  it('达到题库累计输入大小上限后停止继续读取实体', async () => {
+    const bankBytes = (await readFile(join(rootDir, 'bank.yaml'))).byteLength;
+    const firstTopicBytes = (await readFile(join(rootDir, 'topics/child.yaml'))).byteLength;
+    const result = await validateQuestionBankDirectory(rootDir, {
+      maxTotalBytes: bankBytes + firstTopicBytes,
+    });
+    const limitDiagnostic = result.diagnostics.find(({ code }) => code === 'OQB-FILE-016');
+
+    expect(limitDiagnostic?.file).toBe('topics/root.yaml');
+    expect(result.data.topics.map(({ id }) => id)).toEqual(['topic-child']);
+  });
+
+  it('拒绝无效的题库累计输入大小限制', async () => {
+    const result = await validateQuestionBankDirectory(rootDir, { maxTotalBytes: 0 });
+
+    expect(result.valid).toBe(false);
+    expect(result.diagnostics.map(({ code }) => code)).toContain('OQB-FILE-017');
+  });
 });
 
 async function writeQuestionBank(rootDir: string): Promise<void> {
