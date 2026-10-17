@@ -589,6 +589,35 @@ describe('OpenQuestionBank Core', () => {
     );
   });
 
+  it('报告规范化后重复的选择题选项', async () => {
+    await writeFile(
+      join(rootDir, 'questions/choices.yaml'),
+      questionYaml(
+        'q-choices',
+        'k-one',
+        [
+          'choices:',
+          '  - { id: choice-a, text: "Choice A" }',
+          '  - { id: choice-b, text: "  ＣＨＯＩＣＥ　Ａ " }',
+          '  - { id: choice-c, text: "不支持" }',
+          'answer: { choiceId: choice-c }',
+        ].join('\n'),
+      ).replace('type: true_false', 'type: single_choice'),
+    );
+
+    const result = await validateQuestionBankDirectory(rootDir);
+
+    expect(result.valid).toBe(true);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'OQB-QUALITY-003',
+        severity: 'warning',
+        entityId: 'q-choices',
+        fieldPath: 'choices[1].text',
+      }),
+    );
+  });
+
   it('拒绝只包含空白的许可证、维护者名称、难度和答案内容', async () => {
     const bankPath = join(rootDir, 'bank.yaml');
     const bank = await readFile(bankPath, 'utf8');

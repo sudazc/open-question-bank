@@ -33,22 +33,45 @@ export function validateContentQuality(
   const firstQuestionByStem = new Map<string, LocatedEntity<{ id: string }>>();
   for (const question of bank.questions) {
     const stem = normalizeText(question.value.stem);
-    if (!stem) {
-      continue;
+    if (stem) {
+      const first = firstQuestionByStem.get(stem);
+      if (first) {
+        diagnostics.push({
+          code: 'OQB-QUALITY-002',
+          severity: 'warning',
+          message: `题干与题目 ${first.value.id} 完全重复`,
+          file: question.file,
+          entityId: question.value.id,
+          fieldPath: 'stem',
+          suggestion: '确认重复题目是否有意保留，并补充区分场景或合并重复内容',
+        });
+      } else {
+        firstQuestionByStem.set(stem, question);
+      }
     }
-    const first = firstQuestionByStem.get(stem);
-    if (first) {
-      diagnostics.push({
-        code: 'OQB-QUALITY-002',
-        severity: 'warning',
-        message: `题干与题目 ${first.value.id} 完全重复`,
-        file: question.file,
-        entityId: question.value.id,
-        fieldPath: 'stem',
-        suggestion: '确认重复题目是否有意保留，并补充区分场景或合并重复内容',
-      });
-    } else {
-      firstQuestionByStem.set(stem, question);
+
+    if ('choices' in question.value) {
+      const firstChoiceByText = new Map<string, string>();
+      for (const [index, choice] of question.value.choices.entries()) {
+        const text = normalizeText(choice.text);
+        if (!text) {
+          continue;
+        }
+        const firstChoiceId = firstChoiceByText.get(text);
+        if (firstChoiceId) {
+          diagnostics.push({
+            code: 'OQB-QUALITY-003',
+            severity: 'warning',
+            message: `选项文本与选项 ${firstChoiceId} 规范化后重复`,
+            file: question.file,
+            entityId: question.value.id,
+            fieldPath: `choices[${index}].text`,
+            suggestion: '检查选项是否重复；如含义相同请合并或改写成可区分的选项',
+          });
+        } else {
+          firstChoiceByText.set(text, choice.id);
+        }
+      }
     }
   }
 }
