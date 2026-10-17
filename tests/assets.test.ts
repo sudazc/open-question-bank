@@ -229,8 +229,24 @@ describe('Core 资源校验', () => {
           '```md',
           '![代码块示例](assets/fenced.svg)',
           '```',
+          '',
+          '    <script>alert(1)</script>',
+          '    ![缩进代码块示例](assets/indented.svg)',
         ].join('\n'),
       ),
+    );
+
+    const result = await validateQuestionBankDirectory(rootDir);
+
+    expect(result.valid).toBe(true);
+    expect(result.diagnostics).toEqual([]);
+  });
+
+  it('不会把列表中的缩进资源链接误当作代码块', async () => {
+    await writeFile(join(rootDir, 'assets/list.svg'), '<svg/>');
+    await writeFile(
+      join(rootDir, 'knowledge/note.md'),
+      knowledgeMarkdown(['assets/list.svg'], '- 列表内容\n    ![列表图片](assets/list.svg)'),
     );
 
     const result = await validateQuestionBankDirectory(rootDir);
