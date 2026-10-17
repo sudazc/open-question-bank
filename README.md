@@ -155,7 +155,7 @@ review:
   status: draft
 ```
 
-`type` 决定答案结构。V1.0 支持：`single_choice`、`multiple_choice`、`true_false`、`fill_blank`、`numeric` 和 `short_answer`。每道题都需要稳定 `id`、考点和知识引用、难度、来源及审核状态。题型字段和答案示例见 [数据模型说明](docs/data-model.md)。
+`type` 决定答案结构。V1.0 支持：`single_choice`、`multiple_choice`、`true_false`、`fill_blank`、`numeric` 和 `short_answer`。每道题都需要稳定 `id`、考点和知识引用、难度、来源及审核状态。填空题用 `{{blank-id}}` 标记题干中的空，并在答案中使用对应 ID。题型字段和答案示例见 [数据模型说明](docs/data-model.md)。
 
 ### 添加知识笔记
 

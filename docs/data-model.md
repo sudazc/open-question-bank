@@ -34,7 +34,7 @@ Markdown 知识文件的 YAML Front Matter 存放 `Knowledge` 元数据，正文
 - `single_choice`：至少两个 `{id, text}` 选项，答案为 `{choiceId}`。
 - `multiple_choice`：至少两个选项，答案为非空且无重复 ID 的 `{choiceIds}`；V1 评分要求正确选项集合完全匹配，不计算部分分。
 - `true_false`：答案为 JSON 布尔值。
-- `fill_blank`：答案包含一个或多个空，每空包含允许答案列表。Core 评分按 `caseSensitive` 缺省 `false`、`whitespace` 缺省 `trim` 解释；`collapse` 表示折叠连续空白。V1 要求所有空都正确才得分，不计算部分分。
+- `fill_blank`：答案包含一个或多个空，每空包含唯一 ID 和允许答案列表。题干用 `{{blank-id}}` 标记填空位置；每个答案空项必须在题干中恰好对应一个占位符，未知、缺失或重复占位符会由 Core 报错。Markdown 行内代码和代码围栏中的示例不作为占位符。Core 评分按 `caseSensitive` 缺省 `false`、`whitespace` 缺省 `trim` 解释；`collapse` 表示折叠连续空白。V1 要求所有空都正确才得分，不计算部分分。
 - `numeric`：答案及绝对/相对容差使用十进制字符串。容差字段缺省按零解释。Core 使用精确十进制计算；误差不大于绝对容差或不大于标准答案绝对值乘相对容差时判为正确。`unitRule` 可要求、可选或忽略单位，并可列出等价单位别名。V1 数据模型不声明单位换算系数；需要换算时必须先扩展并版本化该模型。
 - `short_answer`：包含参考答案和可选评分要点；V1 返回待人工审核结果，不进行自动语义评分。
 

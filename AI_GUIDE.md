@@ -85,6 +85,7 @@ https://github.com/sudazc/open-question-bank/blob/main/AI_GUIDE.md
 - 每个实体使用稳定 ID；题目、知识和考点之间按 ID 关联，不按文件名关联。
 - 按 `bank.yaml` 中的 `paths` 保存文件；Knowledge 使用 Markdown Front Matter，正文从 Front Matter 后开始。
 - 每道题至少要有稳定 ID、题型、题干、正确答案、难度、分值、所属考点或知识、来源和审核状态。六种题型及答案结构以 `docs/data-model.md` 和 Schema 为准。
+- 编写填空题时，在题干中用 `{{blank-id}}` 标出每个空，并在 `answer.blanks` 中使用相同的 ID；每个答案空项在题干中只能出现一次。不要把代码示例里的双花括号当作实际填空位置。
 - Markdown 资源必须放在题库根目录下的配置资源目录中，使用正斜杠相对路径，并在实体 `assets` 字段中声明。为了能导出到 Windows、macOS 和 Linux，文件名每段不得含 Windows 非法字符或控制字符，不得以点或空格结尾，不得使用 `CON`、`NUL` 等设备名，UTF-8 长度不得超过 255 字节；避免资源和导出页面之间出现大小写或 Unicode 规范化后重名。
 - 默认只创建用户需要的实体类型；不要为了填满目录而生成空考试、空题组或无用知识笔记。
 - 不要修改 OpenQuestionBank 的 Schema 或项目代码来迁就生成内容。遇到现有格式无法表达的需求，先说明限制并询问用户。

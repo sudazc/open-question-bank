@@ -229,6 +229,13 @@ function validateQuestionReferences(
         value.answer.blanks.map(({ id }) => id),
         diagnostics,
       );
+      validateFillBlankPlaceholders(
+        question.file,
+        value.id,
+        value.stem,
+        value.answer.blanks,
+        diagnostics,
+      );
     } else if (value.type === 'short_answer' && value.answer.rubric) {
       validateUniqueNestedIds(
         question.file,
@@ -279,6 +286,61 @@ function validateQuestionReferences(
       );
     }
   }
+}
+
+function validateFillBlankPlaceholders(
+  file: string,
+  questionId: string,
+  stem: string,
+  blanks: readonly { id: string }[],
+  diagnostics: Diagnostic[],
+): void {
+  const answerBlankIds = new Set(blanks.map(({ id }) => id));
+  const placeholderCounts = new Map<string, number>();
+  const pattern = /\{\{([^{}\r\n]*)\}\}/g;
+  for (const match of maskMarkdownCode(stem).matchAll(pattern)) {
+    const id = match[1] ?? '';
+    placeholderCounts.set(id, (placeholderCounts.get(id) ?? 0) + 1);
+  }
+
+  for (const [id, count] of placeholderCounts) {
+    if (!answerBlankIds.has(id)) {
+      addDiagnostic(
+        diagnostics,
+        file,
+        questionId,
+        'OQB-QUESTION-005',
+        `题干中的填空占位符没有对应答案空项：{{${id}}}`,
+        'stem',
+        '将占位符 ID 与 answer.blanks 中的 ID 对齐',
+      );
+    }
+    if (count > 1) {
+      addDiagnostic(
+        diagnostics,
+        file,
+        questionId,
+        'OQB-QUESTION-007',
+        `题干中的填空占位符重复：{{${id}}}`,
+        'stem',
+        '确保每个答案空项的占位符在题干中只出现一次',
+      );
+    }
+  }
+
+  blanks.forEach(({ id }, index) => {
+    if (!placeholderCounts.has(id)) {
+      addDiagnostic(
+        diagnostics,
+        file,
+        questionId,
+        'OQB-QUESTION-006',
+        `答案空项在题干中没有占位符：${id}`,
+        `answer.blanks[${index}].id`,
+        `在题干中添加 {{${id}}}`,
+      );
+    }
+  });
 }
 
 function validateQuestionGroupReferences(

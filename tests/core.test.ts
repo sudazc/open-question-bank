@@ -248,6 +248,58 @@ describe('OpenQuestionBank Core', () => {
     expect(result.diagnostics.map(({ code }) => code)).not.toContain('OQB-REF-003');
   });
 
+  it('要求填空题题干与答案空项一一对应，并忽略 Markdown 代码示例', async () => {
+    await writeFile(
+      join(rootDir, 'questions/one.yaml'),
+      fillBlankQuestionYaml(
+        'q-one',
+        'k-one',
+        '水的化学式是 {{blank-a}}。示例 `{{inline-example}}`。\n```text\n{{fenced-example}}\n```',
+        ['blank-a'],
+      ),
+    );
+    await writeFile(
+      join(rootDir, 'questions/unknown.yaml'),
+      fillBlankQuestionYaml('q-unknown', 'k-one', '答案是 {{blank-a}}，不是 {{unknown}}。', [
+        'blank-a',
+      ]),
+    );
+    await writeFile(
+      join(rootDir, 'questions/missing.yaml'),
+      fillBlankQuestionYaml('q-missing', 'k-one', '题干中没有空。', ['blank-a']),
+    );
+    await writeFile(
+      join(rootDir, 'questions/duplicate.yaml'),
+      fillBlankQuestionYaml('q-duplicate', 'k-one', '{{blank-a}} 和 {{blank-a}}。', ['blank-a']),
+    );
+
+    const result = await validateQuestionBankDirectory(rootDir);
+
+    expect(result.valid).toBe(false);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'OQB-QUESTION-005',
+        entityId: 'q-unknown',
+        fieldPath: 'stem',
+      }),
+    );
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'OQB-QUESTION-006',
+        entityId: 'q-missing',
+        fieldPath: 'answer.blanks[0].id',
+      }),
+    );
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'OQB-QUESTION-007',
+        entityId: 'q-duplicate',
+        fieldPath: 'stem',
+      }),
+    );
+    expect(result.diagnostics.filter(({ entityId }) => entityId === 'q-one')).toEqual([]);
+  });
+
   it('校验反斜杠转义反引号外的 Markdown 内部引用', async () => {
     const note = knowledgeMarkdown('k-one', '', '').replace(
       '正文和引用 [关联知识](oqb://knowledge/)。',
@@ -1126,4 +1178,20 @@ function questionYaml(id: string, knowledgeId: string, answer = 'answer: true'):
     'source: { type: original }',
     'review: { status: draft }',
   ].join('\n');
+}
+
+function fillBlankQuestionYaml(
+  id: string,
+  knowledgeId: string,
+  stem: string,
+  blankIds: readonly string[],
+): string {
+  const answer = [
+    'answer:',
+    '  blanks:',
+    ...blankIds.flatMap((blankId) => [`    - id: ${blankId}`, '      acceptedAnswers: [正确答案]']),
+  ].join('\n');
+  return questionYaml(id, knowledgeId, answer)
+    .replace('type: true_false', 'type: fill_blank')
+    .replace(`stem: 该陈述 ${id} 是否正确？`, `stem: ${JSON.stringify(stem)}`);
 }
