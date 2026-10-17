@@ -257,7 +257,7 @@ function rewriteMarkdownReferenceDestinations(
   outputPathBySourcePath: ReadonlyMap<string, string>,
 ): string {
   const definitionPattern =
-    /^(?:[ \t]{0,3}>[ \t]?)*[ \t]{0,3}\[[^\]\n]+\]:[ \t]*(<[^>\n]*>|(?:\\.|[^ \t\r\n])+)/gm;
+    /^(?:[ \t]{0,3}>[ \t]?)*[ \t]*\[[^\]\n]+\]:[ \t]*(<[^>\n]*>|(?:\\.|[^ \t\r\n])+)/gm;
   const matches = [...maskMarkdownCode(markdown).matchAll(definitionPattern)];
   let result = markdown;
   for (const match of matches.reverse()) {

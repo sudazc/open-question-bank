@@ -442,6 +442,10 @@ describe('OpenQuestionBank Obsidian Vault 导出器', () => {
           ...knowledge,
           body: [
             '[question-ref]: <oqb://question/question-single-choice>',
+            '- 外层列表',
+            '  - 内层列表',
+            '    [嵌套关联题目][nested-question-ref]',
+            '    [nested-question-ref]: <../questions/id-question-single-choice.md>',
             '> ![三角形][figure-ref]',
             '>',
             '> [figure-ref]: <assets/triangle.svg>',
@@ -463,10 +467,14 @@ describe('OpenQuestionBank Obsidian Vault 导出器', () => {
     const encodedQuestionPath = (questionPath ?? '').split('/').map(encodeURIComponent).join('/');
 
     expect(knowledgeContents).toContain('[关联题目][question-ref]');
+    expect(knowledgeContents).toContain('[嵌套关联题目][nested-question-ref]');
     expect(knowledgeContents).toContain('> ![三角形][figure-ref]');
     expect(questionPath).toBeDefined();
     expect(knowledgeContents).toContain('[[' + (questionPath?.replace(/\.md$/, '') ?? '') + '|');
     expect(knowledgeContents).toContain('[question-ref]: <../' + encodedQuestionPath + '>');
+    expect(knowledgeContents).toContain(
+      '    [nested-question-ref]: <../' + encodedQuestionPath + '>',
+    );
     expect(knowledgeContents).toContain('> [figure-ref]: <../assets/triangle.svg>');
     expect(knowledgeContents).not.toContain('../questions/id-question-single-choice.md');
   });

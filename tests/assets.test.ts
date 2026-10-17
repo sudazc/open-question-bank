@@ -70,6 +70,27 @@ describe('Core 资源校验', () => {
     expect(result.diagnostics.map(({ code }) => code)).toContain('OQB-ASSET-003');
   });
 
+  it('检查嵌套列表中的引用式资源链接定义', async () => {
+    await writeFile(join(rootDir, 'assets/nested.svg'), '<svg/>');
+    await writeFile(
+      join(rootDir, 'knowledge/note.md'),
+      knowledgeMarkdown(
+        ['assets/nested.svg'],
+        [
+          '- 外层列表',
+          '  - 内层列表',
+          '    ![嵌套图片][nested-image]',
+          '    [nested-image]: <assets/nested.svg>',
+        ].join('\n'),
+      ),
+    );
+
+    const result = await validateQuestionBankDirectory(rootDir);
+
+    expect(result.valid).toBe(true);
+    expect(result.diagnostics).toEqual([]);
+  });
+
   it('重复的引用标签使用首个定义', async () => {
     await writeFile(join(rootDir, 'assets/valid.svg'), '<svg/>');
     await writeFile(
