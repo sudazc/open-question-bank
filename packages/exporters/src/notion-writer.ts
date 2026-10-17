@@ -6,6 +6,7 @@ import {
   readPreviousExportFiles,
   removeStaleExportFiles,
   writeExportFiles,
+  type ExportWriterOptions,
 } from './export-writer.js';
 import { createQuestionBankNotionExport, getQuestionBankNotionFilePaths } from './notion.js';
 
@@ -19,13 +20,19 @@ export async function writeQuestionBankNotionExport(
   data: QuestionBankData,
   sourceDirectory: string,
   outputDirectory: string,
+  options: ExportWriterOptions = {},
 ): Promise<WrittenNotionExport> {
   const bank = data.bank;
   if (!bank) {
     throw new Error('Notion 导出要求存在有效的 Bank 实体');
   }
 
-  const assetSources = await collectExportAssetSources(sourceDirectory, data, bank);
+  const assetSources = await collectExportAssetSources(
+    sourceDirectory,
+    data,
+    bank,
+    options.maxTotalAssetBytes,
+  );
   const targetDirectory = await prepareExportDirectory(sourceDirectory, outputDirectory, bank, [
     ...getQuestionBankNotionFilePaths(data),
     ...assetSources.map(({ path }) => path),

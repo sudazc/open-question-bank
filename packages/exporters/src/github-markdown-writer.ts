@@ -6,6 +6,7 @@ import {
   readPreviousExportFiles,
   removeStaleExportFiles,
   writeExportFiles,
+  type ExportWriterOptions,
 } from './export-writer.js';
 import {
   createQuestionBankGithubMarkdownExport,
@@ -22,13 +23,19 @@ export async function writeQuestionBankGithubMarkdownExport(
   data: QuestionBankData,
   sourceDirectory: string,
   outputDirectory: string,
+  options: ExportWriterOptions = {},
 ): Promise<WrittenGithubMarkdownExport> {
   const bank = data.bank;
   if (!bank) {
     throw new Error('GitHub Markdown 导出要求存在有效的 Bank 实体');
   }
 
-  const assetSources = await collectExportAssetSources(sourceDirectory, data, bank);
+  const assetSources = await collectExportAssetSources(
+    sourceDirectory,
+    data,
+    bank,
+    options.maxTotalAssetBytes,
+  );
   const targetDirectory = await prepareExportDirectory(sourceDirectory, outputDirectory, bank, [
     ...getQuestionBankGithubMarkdownFilePaths(data),
     ...assetSources.map(({ path }) => path),

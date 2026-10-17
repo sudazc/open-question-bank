@@ -3,12 +3,16 @@ import { mkdtemp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promis
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { validateQuestionBankDirectory } from '../packages/core/src/index.js';
 import {
+  validateQuestionBankDirectory,
+  type QuestionBankData,
+} from '../packages/core/src/index.js';
+import {
+  collectExportAssetSources,
   prepareExportDirectory,
   removeStaleExportFiles,
 } from '../packages/exporters/src/export-writer.js';
-import { bank } from './fixtures.js';
+import { bank, knowledge } from './fixtures.js';
 
 describe('Core 资源校验', () => {
   let rootDir: string;
@@ -52,6 +56,62 @@ describe('Core 资源校验', () => {
 
     expect(result.valid, JSON.stringify(result.diagnostics, null, 2)).toBe(true);
     expect(result.diagnostics).toEqual([]);
+  });
+
+  it('限制引用资源累计大小，并按资源路径去重', async () => {
+    await writeFile(
+      join(rootDir, 'knowledge/note.md'),
+      knowledgeMarkdown(
+        ['assets/shared.dat', 'assets/first.dat'],
+        '[共享资源](assets/shared.dat) [第一份资源](assets/first.dat)',
+      ),
+    );
+    await writeFile(
+      join(rootDir, 'questions/question.yaml'),
+      questionYaml('![共享资源](assets/shared.dat) ![第二份资源](assets/second.dat)', [
+        'assets/shared.dat',
+        'assets/second.dat',
+      ]),
+    );
+    await writeFile(join(rootDir, 'assets/shared.dat'), '12');
+    await writeFile(join(rootDir, 'assets/first.dat'), '123');
+    await writeFile(join(rootDir, 'assets/second.dat'), '456');
+
+    const overLimit = await validateQuestionBankDirectory(rootDir, { maxTotalAssetBytes: 7 });
+    const atLimit = await validateQuestionBankDirectory(rootDir, { maxTotalAssetBytes: 8 });
+
+    expect(overLimit.valid).toBe(false);
+    expect(overLimit.diagnostics).toContainEqual(
+      expect.objectContaining({ code: 'OQB-ASSET-005', severity: 'fatal' }),
+    );
+    expect(atLimit.valid).toBe(true);
+    expect(atLimit.diagnostics).toEqual([]);
+  });
+
+  it('拒绝无效的引用资源累计大小限制', async () => {
+    const result = await validateQuestionBankDirectory(rootDir, { maxTotalAssetBytes: -1 });
+
+    expect(result.valid).toBe(false);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({ code: 'OQB-FILE-020', severity: 'fatal' }),
+    );
+  });
+
+  it('导出 API 也会限制引用资源累计大小', async () => {
+    const path = 'assets/large.dat';
+    await writeFile(join(rootDir, path), '1234');
+    const data: QuestionBankData = {
+      bank,
+      topics: [],
+      knowledge: [{ ...knowledge, body: '资源', assets: [path] }],
+      questions: [],
+      groups: [],
+      exams: [],
+    };
+
+    await expect(collectExportAssetSources(rootDir, data, bank, 3)).rejects.toThrow(
+      '题库引用资源累计大小超过限制 3 字节',
+    );
   });
 
   it('解码 HTML 字符引用后校验资源文件名', async () => {

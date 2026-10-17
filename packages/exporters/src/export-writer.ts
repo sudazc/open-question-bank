@@ -13,7 +13,7 @@ import {
 } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import type { Bank } from '@openquestionbank/schema';
-import type { QuestionBankData } from '@openquestionbank/core';
+import { defaultMaxTotalAssetBytes, type QuestionBankData } from '@openquestionbank/core';
 import {
   assertSafeExportPath,
   assertUniquePortableExportPaths,
@@ -29,6 +29,12 @@ export interface ExportAssetSource {
 export interface ExportFile {
   path: string;
   contents: string;
+}
+
+/** 控制导出资源处理上限 */
+export interface ExportWriterOptions {
+  /** 限制导出资源累计大小，默认使用 Core 的 256 MiB 上限 */
+  maxTotalAssetBytes?: number;
 }
 
 interface PreviousExportFile {
@@ -49,10 +55,15 @@ export async function collectExportAssetSources(
   sourceDirectory: string,
   data: QuestionBankData,
   bank: Bank,
+  maxTotalAssetBytes = defaultMaxTotalAssetBytes,
 ): Promise<ExportAssetSource[]> {
+  if (!Number.isSafeInteger(maxTotalAssetBytes) || maxTotalAssetBytes < 0) {
+    throw new RangeError('maxTotalAssetBytes 必须是非负安全整数');
+  }
   const sourceRoot = await realpath(sourceDirectory);
   const assetsRoot = resolve(sourceRoot, ...bank.paths.assets.split('/'));
   const assets: ExportAssetSource[] = [];
+  let totalAssetBytes = 0;
   for (const path of [...collectReferencedAssets(data)].sort(compareStrings)) {
     assertSafeExportPath(path, '题库资源路径');
     const sourceFile = resolveSafeRelativePath(sourceRoot, path);
@@ -63,6 +74,10 @@ export async function collectExportAssetSources(
     if (metadata.isSymbolicLink() || !metadata.isFile()) {
       throw new Error(`资源文件不是普通文件：${path}`);
     }
+    if (metadata.size > maxTotalAssetBytes - totalAssetBytes) {
+      throw new Error(`题库引用资源累计大小超过限制 ${maxTotalAssetBytes} 字节`);
+    }
+    totalAssetBytes += metadata.size;
     const canonicalFile = await realpath(sourceFile);
     if (!isPathWithin(sourceRoot, canonicalFile) || !isPathWithin(assetsRoot, canonicalFile)) {
       throw new Error(`资源文件路径越出题库资源目录：${path}`);

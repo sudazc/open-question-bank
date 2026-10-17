@@ -1,7 +1,7 @@
 import { lstat, open, realpath } from 'node:fs/promises';
 import { relative, resolve, sep } from 'node:path';
 import { TextDecoder } from 'node:util';
-import type { Diagnostic } from './diagnostics.js';
+import type { Diagnostic, DiagnosticSeverity } from './diagnostics.js';
 import { decodeHtmlCharacterReferences } from './html-entities.js';
 
 interface AssetEntity {
@@ -21,23 +21,25 @@ interface AssetPathEntry {
   file: string;
 }
 
-interface AssetInspection {
-  status: 'valid' | 'missing' | 'unsafe' | 'unavailable';
-  svgIssue?: string;
-}
+type AssetFileInspection =
+  { status: 'valid'; sizeBytes: number } | { status: 'missing' | 'unsafe' | 'unavailable' };
 
 /** 检查实体资源清单、Markdown 链接与资源文件是否一致 */
 export async function validateAssetReferences(
   canonicalRoot: string,
   relativeAssetsDirectory: string,
   collections: AssetCollections,
+  maxTotalAssetBytes: number,
   diagnostics: Diagnostic[],
 ): Promise<void> {
   const assetsDirectory = normalizeDirectoryPath(relativeAssetsDirectory);
   if (!assetsDirectory) {
     return;
   }
-  const inspections = new Map<string, Promise<AssetInspection>>();
+  const inspections = new Map<string, Promise<AssetFileInspection>>();
+  const svgInspections = new Map<string, Promise<string | undefined>>();
+  const countedAssetPaths = new Set<string>();
+  let totalAssetBytes = 0;
 
   const entities = [
     ...collections.knowledge.map((entity) => ({
@@ -156,47 +158,66 @@ export async function validateAssetReferences(
       checkedPaths.add(path);
       let inspection = inspections.get(path);
       if (!inspection) {
-        inspection = inspectAsset(canonicalRoot, path);
+        inspection = inspectAssetFile(canonicalRoot, path);
         inspections.set(path, inspection);
       }
-      const { status, svgIssue } = await inspection;
-      if (status === 'valid') {
-        if (svgIssue) {
+      const fileInspection = await inspection;
+      if (fileInspection.status !== 'valid') {
+        const unsafe = fileInspection.status === 'unsafe';
+        addAssetDiagnostic(
+          diagnostics,
+          entry.file,
+          entry.entityId,
+          unsafe ? 'OQB-ASSET-001' : 'OQB-ASSET-002',
+          unsafe
+            ? '资源路径包含符号链接或越出题库根目录：' + path
+            : '资源文件不存在、不是普通文件或无法检查：' + path,
+          entry.fieldPath,
+          '确认资源文件存在于题库资源目录中且路径各级均为普通目录或文件',
+        );
+        continue;
+      }
+
+      if (!countedAssetPaths.has(path)) {
+        if (fileInspection.sizeBytes > maxTotalAssetBytes - totalAssetBytes) {
           addAssetDiagnostic(
             diagnostics,
             entry.file,
             entry.entityId,
-            'OQB-SECURITY-003',
-            svgIssue,
+            'OQB-ASSET-005',
+            `题库引用资源累计大小超过限制 ${maxTotalAssetBytes} 字节`,
             entry.fieldPath,
-            '移除 SVG 中的脚本、事件、外部引用、样式和实体声明，保留静态路径与图形元素',
+            '移除不需要的资源，或通过 LoadOptions 显式提高 maxTotalAssetBytes 限制',
+            'fatal',
           );
+          return;
         }
+        totalAssetBytes += fileInspection.sizeBytes;
+        countedAssetPaths.add(path);
+      }
+
+      if (!path.toLowerCase().endsWith('.svg')) {
         continue;
       }
-      const unsafe = status === 'unsafe';
-      addAssetDiagnostic(
-        diagnostics,
-        entry.file,
-        entry.entityId,
-        unsafe ? 'OQB-ASSET-001' : 'OQB-ASSET-002',
-        unsafe
-          ? '资源路径包含符号链接或越出题库根目录：' + path
-          : '资源文件不存在、不是普通文件或无法检查：' + path,
-        entry.fieldPath,
-        '确认资源文件存在于题库资源目录中且路径各级均为普通目录或文件',
-      );
+      let svgInspection = svgInspections.get(path);
+      if (!svgInspection) {
+        svgInspection = inspectSvgContent(canonicalRoot, path);
+        svgInspections.set(path, svgInspection);
+      }
+      const svgIssue = await svgInspection;
+      if (svgIssue) {
+        addAssetDiagnostic(
+          diagnostics,
+          entry.file,
+          entry.entityId,
+          'OQB-SECURITY-003',
+          svgIssue,
+          entry.fieldPath,
+          '移除 SVG 中的脚本、事件、外部引用、样式和实体声明，保留静态路径与图形元素',
+        );
+      }
     }
   }
-}
-
-async function inspectAsset(canonicalRoot: string, path: string): Promise<AssetInspection> {
-  const status = await inspectAssetFile(canonicalRoot, path);
-  if (status !== 'valid' || !path.toLowerCase().endsWith('.svg')) {
-    return { status };
-  }
-  const svgIssue = await inspectSvgContent(canonicalRoot, path);
-  return svgIssue === undefined ? { status } : { status, svgIssue };
 }
 
 function normalizeDirectoryPath(value: string): string | undefined {
@@ -283,32 +304,36 @@ function isInsideAssetsDirectory(path: string, assetsDirectory: string): boolean
 async function inspectAssetFile(
   canonicalRoot: string,
   relativePath: string,
-): Promise<'valid' | 'missing' | 'unsafe' | 'unavailable'> {
+): Promise<AssetFileInspection> {
   const segments = relativePath.split('/');
   let currentPath = canonicalRoot;
+  let sizeBytes: number | undefined;
   try {
     for (const [index, segment] of segments.entries()) {
       currentPath = resolve(currentPath, segment);
       const metadata = await lstat(currentPath);
       if (metadata.isSymbolicLink()) {
-        return 'unsafe';
+        return { status: 'unsafe' };
       }
       const isLast = index === segments.length - 1;
       if ((isLast && !metadata.isFile()) || (!isLast && !metadata.isDirectory())) {
-        return 'missing';
+        return { status: 'missing' };
+      }
+      if (isLast) {
+        sizeBytes = metadata.size;
       }
       const canonicalPath = await realpath(currentPath);
       if (!isContained(canonicalRoot, canonicalPath)) {
-        return 'unsafe';
+        return { status: 'unsafe' };
       }
     }
   } catch (error) {
     if (isMissingPath(error)) {
-      return 'missing';
+      return { status: 'missing' };
     }
-    return 'unavailable';
+    return { status: 'unavailable' };
   }
-  return 'valid';
+  return sizeBytes === undefined ? { status: 'unavailable' } : { status: 'valid', sizeBytes };
 }
 
 function isContained(rootPath: string, targetPath: string): boolean {
@@ -335,10 +360,11 @@ function addAssetDiagnostic(
   message: string,
   fieldPath: string,
   suggestion: string,
+  severity: DiagnosticSeverity = 'error',
 ): void {
   diagnostics.push({
     code,
-    severity: 'error',
+    severity,
     message,
     file,
     ...(entityId === undefined ? {} : { entityId }),

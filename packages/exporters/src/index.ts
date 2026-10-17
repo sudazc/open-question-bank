@@ -34,3 +34,4 @@ export {
   type NotionExportPackage,
 } from './notion.js';
 export { writeQuestionBankNotionExport, type WrittenNotionExport } from './notion-writer.js';
+export type { ExportWriterOptions } from './export-writer.js';

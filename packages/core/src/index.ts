@@ -13,6 +13,7 @@ export {
 export { buildEntityIndex, type EntityIndex } from './entity-index.js';
 export { decodeHtmlCharacterReferences } from './html-entities.js';
 export {
+  defaultMaxTotalAssetBytes,
   loadQuestionBank,
   type LoadOptions,
   type ParsedEntity,

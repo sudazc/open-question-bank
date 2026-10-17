@@ -8,6 +8,8 @@ import { DocumentParseError, parseMarkdownDocument, parseYamlDocument } from './
 import { validateEntity } from './schema-validator.js';
 
 const bankFilename = 'bank.yaml';
+/** 默认允许引用资源的累计大小为 256 MiB */
+export const defaultMaxTotalAssetBytes = 268_435_456;
 const supportedExtensions: Record<CollectionName, readonly string[]> = {
   topics: ['.yaml', '.yml'],
   knowledge: ['.md'],
@@ -37,6 +39,8 @@ export interface ParsedQuestionBank {
 export interface LoadOptions {
   maxFileBytes?: number;
   maxTotalBytes?: number;
+  /** 限制一份题库中被实体引用的资源累计大小 */
+  maxTotalAssetBytes?: number;
   maxEntityFiles?: number;
   /** 最多扫描的实体目录条目数量 */
   maxScannedEntries?: number;
@@ -65,6 +69,7 @@ export async function loadQuestionBank(
   };
   const maxFileBytes = options.maxFileBytes ?? 2_097_152;
   const maxTotalBytes = options.maxTotalBytes ?? 67_108_864;
+  const maxTotalAssetBytes = options.maxTotalAssetBytes ?? defaultMaxTotalAssetBytes;
   const maxEntityFiles = options.maxEntityFiles ?? 10_000;
   const maxScannedEntries = options.maxScannedEntries ?? 50_000;
   if (!Number.isSafeInteger(maxFileBytes) || maxFileBytes < 1) {
@@ -90,6 +95,15 @@ export async function loadQuestionBank(
       code: 'OQB-FILE-017',
       severity: 'fatal',
       message: 'maxTotalBytes 必须是正安全整数',
+      file: '.',
+    });
+    return result;
+  }
+  if (!Number.isSafeInteger(maxTotalAssetBytes) || maxTotalAssetBytes < 0) {
+    result.diagnostics.push({
+      code: 'OQB-FILE-020',
+      severity: 'fatal',
+      message: 'maxTotalAssetBytes 必须是非负安全整数',
       file: '.',
     });
     return result;
@@ -232,6 +246,7 @@ export async function loadQuestionBank(
     canonicalRoot,
     bankValidation.value.paths.assets,
     { knowledge: result.knowledge, questions: result.questions, groups: result.groups },
+    maxTotalAssetBytes,
     result.diagnostics,
   );
 
