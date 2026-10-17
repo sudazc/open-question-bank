@@ -1,8 +1,8 @@
-/** 屏蔽 Markdown 行内代码和围栏代码并保留字符位置 */
+/** 屏蔽 Markdown 行内代码、围栏和缩进代码块并保留字符位置 */
 export function maskMarkdownCode(markdown: string): string {
   const characters = markdown.split('');
   let lineStart = 0;
-  let fence: { marker: string; length: number } | undefined;
+  let fence: { marker: string; length: number; quoteDepth: number } | undefined;
   let previousQuoteDepth: number | undefined;
   let previousLineBlank = true;
   let inIndentedCodeBlock = false;
@@ -11,13 +11,17 @@ export function maskMarkdownCode(markdown: string): string {
     const newlineIndex = markdown.indexOf('\n', lineStart);
     const lineEnd = newlineIndex < 0 ? markdown.length : newlineIndex;
     const line = markdown.slice(lineStart, lineEnd).replace(/\r$/, '');
-    const { content, quoteDepth } = stripBlockquotePrefixes(line);
+    let lineContext = fence
+      ? stripBlockquotePrefixes(line, fence.quoteDepth)
+      : stripBlockquotePrefixes(line);
+    if (fence && lineContext.quoteDepth < fence.quoteDepth) {
+      fence = undefined;
+      lineContext = stripBlockquotePrefixes(line);
+    }
+    const { content, quoteDepth } = lineContext;
     if (previousQuoteDepth !== undefined && quoteDepth !== previousQuoteDepth) {
       listContentIndents.length = 0;
       inIndentedCodeBlock = false;
-      if (quoteDepth < previousQuoteDepth) {
-        fence = undefined;
-      }
     }
     previousQuoteDepth = quoteDepth;
     const indentation = getIndentation(content);
@@ -36,7 +40,7 @@ export function maskMarkdownCode(markdown: string): string {
         fence = undefined;
       }
     } else if (fenceMarker && !(fenceMarker[0] === '`' && fenceInfo.includes('`'))) {
-      fence = { marker: fenceMarker[0] ?? '', length: fenceMarker.length };
+      fence = { marker: fenceMarker[0] ?? '', length: fenceMarker.length, quoteDepth };
       inIndentedCodeBlock = false;
       maskMarkdownRange(characters, lineStart, lineEnd);
     } else if (content.trim().length === 0) {
@@ -135,10 +139,13 @@ export function maskMarkdownCode(markdown: string): string {
   return characters.join('');
 }
 
-function stripBlockquotePrefixes(line: string): { content: string; quoteDepth: number } {
+function stripBlockquotePrefixes(
+  line: string,
+  maxDepth = Number.POSITIVE_INFINITY,
+): { content: string; quoteDepth: number } {
   let cursor = 0;
   let quoteDepth = 0;
-  while (cursor < line.length) {
+  while (cursor < line.length && quoteDepth < maxDepth) {
     let quoteMarker = cursor;
     let spaces = 0;
     while (line[quoteMarker] === ' ' && spaces < 3) {

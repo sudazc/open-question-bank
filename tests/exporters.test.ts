@@ -360,7 +360,9 @@ describe('OpenQuestionBank Obsidian Vault 导出器', () => {
             '[资源文件](assets/triangle.svg)',
             '[path_name](assets/triangle.svg)',
             '`[行内代码](../questions/id-question-single-choice.md)`',
-            '```md\n[代码示例](oqb://question/question-single-choice)\n```',
+            '```md\n> [代码示例](oqb://question/question-single-choice)\n```',
+            '',
+            '![围栏后的图片](assets/triangle.svg)',
             '',
             '    ![缩进代码示例](assets/triangle.svg)',
             '',
@@ -391,8 +393,9 @@ describe('OpenQuestionBank Obsidian Vault 导出器', () => {
     expect(knowledgeContents).toContain('[[assets/triangle.svg|path_name]]');
     expect(knowledgeContents).toContain('`[行内代码](../questions/id-question-single-choice.md)`');
     expect(knowledgeContents).toContain(
-      '```md\n[代码示例](oqb://question/question-single-choice)\n```',
+      '```md\n> [代码示例](oqb://question/question-single-choice)\n```',
     );
+    expect(knowledgeContents).toContain('![[assets/triangle.svg]]');
     expect(knowledgeContents).toContain('    ![缩进代码示例](assets/triangle.svg)');
     expect(knowledgeContents).toContain('    ![[assets/triangle.svg]]');
     expect(exported.files.find(({ path }) => path === '题库首页.md')?.contents).toContain(

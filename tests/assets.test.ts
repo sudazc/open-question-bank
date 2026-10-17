@@ -229,6 +229,10 @@ describe('Core 资源校验', () => {
           '```md',
           '![代码块示例](assets/fenced.svg)',
           '```',
+          '> ```md',
+          '> <script>alert(1)</script>',
+          '> ![引用块代码示例](assets/quoted.svg)',
+          '> ```',
           '',
           '    <script>alert(1)</script>',
           '    ![缩进代码块示例](assets/indented.svg)',
@@ -253,6 +257,29 @@ describe('Core 资源校验', () => {
 
     expect(result.valid).toBe(true);
     expect(result.diagnostics).toEqual([]);
+  });
+
+  it('围栏代码中以大于号开头的示例不会屏蔽后续资源链接', async () => {
+    await writeFile(
+      join(rootDir, 'knowledge/note.md'),
+      knowledgeMarkdown(
+        [],
+        [
+          '```md',
+          '> ![代码示例](assets/example.svg)',
+          '```',
+          '',
+          '![实际图片](assets/missing.svg)',
+        ].join('\n'),
+      ),
+    );
+
+    const result = await validateQuestionBankDirectory(rootDir);
+    const codes = result.diagnostics.map(({ code }) => code);
+
+    expect(result.valid).toBe(false);
+    expect(codes).toContain('OQB-ASSET-002');
+    expect(codes).toContain('OQB-ASSET-003');
   });
 
   it('检查失配的转义反引号跨度中的实际资源链接', async () => {
