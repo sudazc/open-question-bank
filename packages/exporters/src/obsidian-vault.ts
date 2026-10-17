@@ -183,7 +183,14 @@ function convertMarkdownLinks(
   entityTargets: ReadonlyMap<string, EntityPageTarget>,
   outputPathBySourcePath: ReadonlyMap<string, string>,
 ): string {
-  const visibleMarkdown = maskMarkdownCode(markdown);
+  const linkedMarkdown = rewriteMarkdownReferenceDestinations(
+    markdown,
+    sourcePath,
+    markdownPaths,
+    assetPaths,
+    outputPathBySourcePath,
+  );
+  const visibleMarkdown = maskMarkdownCode(linkedMarkdown);
   let result = '';
   let consumedUntil = 0;
   let index = 0;
@@ -212,7 +219,9 @@ function convertMarkdownLinks(
       continue;
     }
 
-    const destination = parseDestination(markdown.slice(closingBracket + 2, closingParenthesis));
+    const destination = parseDestination(
+      linkedMarkdown.slice(closingBracket + 2, closingParenthesis),
+    );
     const converted = destination
       ? convertDestination(
           destination,
@@ -222,7 +231,7 @@ function convertMarkdownLinks(
           entityTargets,
           outputPathBySourcePath,
           image,
-          markdown.slice(openingBracket + 1, closingBracket),
+          linkedMarkdown.slice(openingBracket + 1, closingBracket),
         )
       : undefined;
     if (!converted) {
@@ -231,25 +240,60 @@ function convertMarkdownLinks(
     }
 
     const linkStart = image ? index : openingBracket;
-    result += markdown.slice(consumedUntil, linkStart);
+    result += linkedMarkdown.slice(consumedUntil, linkStart);
     result += converted;
     consumedUntil = closingParenthesis + 1;
     index = consumedUntil;
   }
 
-  return result + markdown.slice(consumedUntil);
+  return result + linkedMarkdown.slice(consumedUntil);
 }
 
-function convertDestination(
+function rewriteMarkdownReferenceDestinations(
+  markdown: string,
+  sourcePath: string,
+  markdownPaths: ReadonlySet<string>,
+  assetPaths: ReadonlySet<string>,
+  outputPathBySourcePath: ReadonlyMap<string, string>,
+): string {
+  const definitionPattern = /^[ \t]{0,3}\[[^\]\n]+\]:[ \t]*(<[^>\n]*>|(?:\\.|[^ \t\r\n])+)/gm;
+  const matches = [...maskMarkdownCode(markdown).matchAll(definitionPattern)];
+  let result = markdown;
+  for (const match of matches.reverse()) {
+    const start = match.index;
+    const rawDestination = match[1];
+    if (start === undefined || rawDestination === undefined) {
+      continue;
+    }
+    const destination = parseDestination(rawDestination);
+    const localDestination = destination
+      ? resolveLocalDestination(destination, sourcePath, markdownPaths, assetPaths)
+      : undefined;
+    if (!localDestination) {
+      continue;
+    }
+    const sourceOutputPath = outputPathBySourcePath.get(sourcePath) ?? sourcePath;
+    const targetOutputPath =
+      outputPathBySourcePath.get(localDestination.targetPath) ?? localDestination.targetPath;
+    const relativePath = posix.relative(posix.dirname(sourceOutputPath), targetOutputPath);
+    const encodedPath = relativePath.split('/').map(encodeURIComponent).join('/');
+    const replacement =
+      '<' + encodedPath + localDestination.fragment.replace(/ /g, '%20').replace(/>/g, '%3E') + '>';
+    const destinationStart = start + match[0].length - rawDestination.length;
+    result =
+      result.slice(0, destinationStart) +
+      replacement +
+      result.slice(destinationStart + rawDestination.length);
+  }
+  return result;
+}
+
+function resolveLocalDestination(
   destination: string,
   sourcePath: string,
   markdownPaths: ReadonlySet<string>,
   assetPaths: ReadonlySet<string>,
-  entityTargets: ReadonlyMap<string, EntityPageTarget>,
-  outputPathBySourcePath: ReadonlyMap<string, string>,
-  image: boolean,
-  label: string,
-): string | undefined {
+): { targetPath: string; fragment: string; isMarkdown: boolean } | undefined {
   if (/^(?:[A-Za-z][A-Za-z0-9+.-]*:|\/\/|\/)/.test(destination)) {
     return undefined;
   }
@@ -270,11 +314,32 @@ function convertDestination(
     return undefined;
   }
   const isMarkdown = markdownPaths.has(targetPath);
-  const isAsset = assetPaths.has(targetPath);
-  if (!isMarkdown && !isAsset) {
+  if (!isMarkdown && !assetPaths.has(targetPath)) {
     return undefined;
   }
+  return { targetPath, fragment, isMarkdown };
+}
 
+function convertDestination(
+  destination: string,
+  sourcePath: string,
+  markdownPaths: ReadonlySet<string>,
+  assetPaths: ReadonlySet<string>,
+  entityTargets: ReadonlyMap<string, EntityPageTarget>,
+  outputPathBySourcePath: ReadonlyMap<string, string>,
+  image: boolean,
+  label: string,
+): string | undefined {
+  const localDestination = resolveLocalDestination(
+    destination,
+    sourcePath,
+    markdownPaths,
+    assetPaths,
+  );
+  if (!localDestination) {
+    return undefined;
+  }
+  const { targetPath, fragment, isMarkdown } = localDestination;
   const entityTarget = entityTargets.get(targetPath);
   const linkedPath = outputPathBySourcePath.get(targetPath) ?? targetPath;
   const wikiPath = isMarkdown ? linkedPath.replace(/\.md$/, '') : linkedPath;

@@ -264,7 +264,7 @@ pnpm oqb export ../my-question-bank --format github-markdown --out ./dist/my-que
 pnpm oqb export ../my-question-bank --format obsidian --out ./dist/my-question-bank-obsidian
 ```
 
-输出包含题库总览、考点 / 知识 / 题目 / 题组 / 试卷索引、实体独立页面、引用的资源文件和 `manifest.json`。页面文件名使用考点名、知识标题、题干或试卷名；稳定 ID 保存在 Obsidian 属性中，实体关系及 `oqb://` 正文引用转换为 Wiki 链接。题目页不在选项上标记正确答案，答案和解析默认折叠，并按稳定 ID 顺序提供上一题 / 下一题导航。图片资源以嵌入链接呈现，其他资源以 Wiki 链接呈现。导出目录可以直接在 Obsidian 中作为 Vault 打开，也可以随目录移动。
+输出包含题库总览、考点 / 知识 / 题目 / 题组 / 试卷索引、实体独立页面、引用的资源文件和 `manifest.json`。页面文件名使用考点名、知识标题、题干或试卷名；稳定 ID 保存在 Obsidian 属性中，实体关系及内联 `oqb://` 正文引用转换为 Wiki 链接；引用式 Markdown 链接保留原有写法，并改写为 Vault 内的相对路径。题目页不在选项上标记正确答案，答案和解析默认折叠，并按稳定 ID 顺序提供上一题 / 下一题导航。内联图片资源以嵌入链接呈现，其他内联资源以 Wiki 链接呈现；引用式资源链接保留引用写法并更新目标路径。导出目录可以直接在 Obsidian 中作为 Vault 打开，也可以随目录移动。
 
 `--mode release` 会沿用发布筛选，仅导出审核和授权条件通过且引用关系完整的数据。清单记录题库版本、实体统计，以及每个 Markdown 和资源文件的大小及 SHA-256。使用方法、路径映射和清单格式见 [Obsidian Vault 导出说明](docs/export-obsidian-vault.md)。
 

@@ -424,6 +424,41 @@ describe('OpenQuestionBank Obsidian Vault 导出器', () => {
     );
   });
 
+  it('将引用式题库内部链接改写为 Obsidian 页面路径', () => {
+    const obsidianData: QuestionBankData = {
+      ...data,
+      knowledge: [
+        {
+          ...knowledge,
+          body: [
+            '[question-ref]: <oqb://question/question-single-choice>',
+            '[figure-ref]: <assets/triangle.svg>',
+            '',
+            '[关联题目][question-ref]',
+            '![三角形][figure-ref]',
+            '[另一处关联题目](oqb://question/question-single-choice)',
+          ].join('\n'),
+        },
+      ],
+    };
+
+    const exported = createQuestionBankObsidianVaultExport(obsidianData, assets);
+    const knowledgeContents = exported.files.find(({ contents }) =>
+      contents.includes('题库ID: "knowledge-foundations"'),
+    )?.contents;
+    const questionPath = exported.files.find(({ contents }) =>
+      contents.includes('题库ID: "question-single-choice"'),
+    )?.path;
+    const encodedQuestionPath = (questionPath ?? '').split('/').map(encodeURIComponent).join('/');
+
+    expect(knowledgeContents).toContain('[关联题目][question-ref]');
+    expect(questionPath).toBeDefined();
+    expect(knowledgeContents).toContain('[[' + (questionPath?.replace(/\.md$/, '') ?? '') + '|');
+    expect(knowledgeContents).toContain('[question-ref]: <../' + encodedQuestionPath + '>');
+    expect(knowledgeContents).toContain('[figure-ref]: <../assets/triangle.svg>');
+    expect(knowledgeContents).not.toContain('../questions/id-question-single-choice.md');
+  });
+
   it('解析中的元数据同名标题仍完整收纳在折叠答案区内', () => {
     const explanation = [
       '这是答案解析的开头。',
