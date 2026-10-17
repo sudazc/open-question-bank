@@ -1121,7 +1121,7 @@ describe('OpenQuestionBank Core', () => {
         kind: 'complete',
         bytes: Buffer.from('123456'),
       });
-      expect(await readFileWithinLimit(file, 5)).toEqual({ kind: 'limit-exceeded' });
+      expect(await readFileWithinLimit(file, 5)).toEqual({ kind: 'limit-exceeded', bytesRead: 6 });
     } finally {
       await file.close();
     }

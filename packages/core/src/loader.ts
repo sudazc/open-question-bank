@@ -141,7 +141,7 @@ export async function loadQuestionBank(
     });
     return result;
   }
-  let totalBytesRead = bankRead.sizeBytes;
+  let totalBytesRead = bankRead.bytesRead;
   result.bank = { value: bankRead.value, file: bankFile };
 
   const bankValidation = validateEntity('bank', bankRead.value, bankFile);
@@ -210,8 +210,8 @@ export async function loadQuestionBank(
         totalBytesRead,
         canonicalRoot,
       );
-      if ('sizeBytes' in loaded) {
-        totalBytesRead += loaded.sizeBytes;
+      if ('bytesRead' in loaded) {
+        totalBytesRead += loaded.bytesRead;
       }
       if ('diagnostic' in loaded) {
         result.diagnostics.push(loaded.diagnostic);
@@ -425,8 +425,8 @@ async function readDocument(
   maxTotalBytes: number,
   totalBytesRead: number,
   canonicalRoot: string,
-): Promise<{ value: unknown; sizeBytes: number } | { diagnostic: Diagnostic; sizeBytes?: number }> {
-  let sizeBytes = 0;
+): Promise<{ value: unknown; bytesRead: number } | { diagnostic: Diagnostic; bytesRead?: number }> {
+  let bytesRead = 0;
   let file: FileHandle | undefined;
   try {
     const metadata = await lstat(fullPath);
@@ -499,18 +499,19 @@ async function readDocument(
                 file: relativePath,
                 suggestion: '拆分内容或显式提高 maxFileBytes 限制',
               }
-            : createTotalSizeLimitDiagnostic(relativePath, allowedBytes + 1, maxTotalBytes),
+            : createTotalReadLimitDiagnostic(relativePath, maxTotalBytes),
+        bytesRead: readResult.bytesRead,
       };
     }
 
     const bytes = readResult.bytes;
-    sizeBytes = bytes.byteLength;
+    bytesRead = bytes.byteLength;
     const source = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
     if (kind === 'yaml') {
-      return { value: parseYamlDocument(source), sizeBytes };
+      return { value: parseYamlDocument(source), bytesRead };
     }
     const parsed = parseMarkdownDocument(source);
-    return { value: { ...parsed.metadata, body: parsed.body }, sizeBytes };
+    return { value: { ...parsed.metadata, body: parsed.body }, bytesRead };
   } catch (error) {
     const parseError = error instanceof DocumentParseError ? error : undefined;
     return {
@@ -525,14 +526,15 @@ async function readDocument(
           ? '检查 YAML 语法与 Markdown Front Matter 分隔线'
           : '确认文件编码为 UTF-8 且当前进程具有读取权限',
       },
-      ...(sizeBytes > 0 ? { sizeBytes } : {}),
+      ...(bytesRead > 0 ? { bytesRead } : {}),
     };
   } finally {
     await file?.close();
   }
 }
 
-type LimitedFileReadResult = { kind: 'complete'; bytes: Buffer } | { kind: 'limit-exceeded' };
+type LimitedFileReadResult =
+  { kind: 'complete'; bytes: Buffer } | { kind: 'limit-exceeded'; bytesRead: number };
 
 /** 最多返回上限字节内容，并读取额外一个字节判断是否超限 */
 export async function readFileWithinLimit(
@@ -560,7 +562,17 @@ export async function readFileWithinLimit(
   const { bytesRead } = await file.read(overflow, 0, 1, totalBytesRead);
   return bytesRead === 0
     ? { kind: 'complete', bytes: Buffer.concat(chunks, totalBytesRead) }
-    : { kind: 'limit-exceeded' };
+    : { kind: 'limit-exceeded', bytesRead: totalBytesRead + bytesRead };
+}
+
+function createTotalReadLimitDiagnostic(relativePath: string, maxTotalBytes: number): Diagnostic {
+  return {
+    code: 'OQB-FILE-016',
+    severity: 'fatal',
+    message: `读取该文件会使题库累计读取量超过限制 ${maxTotalBytes} 字节`,
+    file: relativePath,
+    suggestion: '拆分题库或显式提高 maxTotalBytes 限制',
+  };
 }
 
 function createTotalSizeLimitDiagnostic(
