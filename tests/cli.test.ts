@@ -189,9 +189,9 @@ describe('OpenQuestionBank CLI', () => {
       output,
     );
     expect(firstExitCode, stderr.join('\n')).toBe(0);
-    const readme = await readFile(join(exportDir, 'README.md'), 'utf8');
+    const readme = await readFile(join(exportDir, '题库首页.md'), 'utf8');
     const questionPage = await readFile(
-      join(exportDir, 'questions', 'id-question-example.md'),
+      join(exportDir, '题目', 'OpenQuestionBank 的源数据主要使用什么方式维护？.md'),
       'utf8',
     );
     const firstManifest = await readFile(join(exportDir, 'manifest.json'), 'utf8');
@@ -202,16 +202,17 @@ describe('OpenQuestionBank CLI', () => {
 
     expect(firstExitCode).toBe(0);
     expect(secondExitCode).toBe(0);
-    expect(readme).toContain('[[topics/README|考点（1）]]');
-    expect(questionPage).toContain('[[topics/id-topic-foundations|基础知识]]');
-    expect(questionPage).toContain('[[knowledge/id-knowledge-getting-started|示例知识点]]');
+    expect(readme).toContain('[[考点/索引|考点（1）]]');
+    expect(questionPage).toContain('[[考点/基础知识|基础知识]]');
+    expect(questionPage).toContain('[[知识笔记/示例知识点|示例知识点]]');
+    expect(questionPage).toContain('> [!question]- 显示答案与解析');
     expect(JSON.parse(firstManifest)).toMatchObject({
       format: 'openquestionbank-obsidian-vault',
-      formatVersion: '1.0.0',
+      formatVersion: '2.0.0',
       bank: { id: 'my-question-bank', version: '0.1.0' },
       statistics: { totalEntities: 4 },
     });
-    expect(await readFile(join(exportDir, 'README.md'), 'utf8')).toBe(readme);
+    expect(await readFile(join(exportDir, '题库首页.md'), 'utf8')).toBe(readme);
     expect(await readFile(join(exportDir, 'manifest.json'), 'utf8')).toBe(firstManifest);
     expect(stdout.join('\n')).toContain('Obsidian Vault 导出完成');
   });
@@ -228,6 +229,7 @@ describe('OpenQuestionBank CLI', () => {
     expect(firstExitCode, stderr.join('\n')).toBe(0);
     const readme = await readFile(join(exportDir, 'README.md'), 'utf8');
     const questionsCsv = await readFile(join(exportDir, 'databases', 'questions.csv'), 'utf8');
+    const answersCsv = await readFile(join(exportDir, 'databases', 'answers.csv'), 'utf8');
     const relationsCsv = await readFile(join(exportDir, 'relations.csv'), 'utf8');
     const questionPage = await readFile(
       join(exportDir, 'questions', 'id-question-example.md'),
@@ -241,14 +243,16 @@ describe('OpenQuestionBank CLI', () => {
 
     expect(firstExitCode).toBe(0);
     expect(secondExitCode).toBe(0);
-    expect(readme).toContain('分别导入 `databases/` 内的六个 CSV');
+    expect(readme).toContain('先导入 `databases/questions.csv`');
     expect(readme).toContain('不会自动创建 Notion 原生 Relation');
     expect(questionsCsv).toContain('question-example');
+    expect(questionsCsv).not.toContain('answerJson');
+    expect(answersCsv).toContain('answerJson');
     expect(relationsCsv).toContain('question,question-example,topicIds,topic,topic-foundations,0');
     expect(questionPage).toContain('OpenQuestionBank 的源数据主要使用什么方式维护？');
     expect(JSON.parse(firstManifest)).toMatchObject({
       format: 'openquestionbank-notion-import',
-      formatVersion: '1.0.0',
+      formatVersion: '2.0.0',
       bank: { id: 'my-question-bank', version: '0.1.0' },
       statistics: { totalEntities: 4 },
     });

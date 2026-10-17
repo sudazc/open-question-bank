@@ -227,11 +227,20 @@ describe('OpenQuestionBank Obsidian Vault 导出器', () => {
     };
 
     const exported = createQuestionBankObsidianVaultExport(obsidianData, assets);
-    const knowledgeContents = exported.files.find(
-      ({ path }) => path === 'knowledge/id-knowledge-foundations.md',
-    )?.contents;
+    const knowledgeFile = exported.files.find(({ contents }) =>
+      contents.includes('题库ID: "knowledge-foundations"'),
+    );
+    const knowledgeContents = knowledgeFile?.contents;
+    const questionFile = exported.files.find(({ contents }) =>
+      contents.includes('题库ID: "question-single-choice"'),
+    );
+    const questionContents = questionFile?.contents;
+    const questionPagePath = questionFile?.path?.replace(/\.md$/, '');
+    const questionPageTitle = questionPagePath?.split('/').at(-1);
 
-    expect(knowledgeContents).toContain('[[questions/id-question-single-choice|关联题目]]');
+    expect(knowledgeFile?.path).toBe('知识笔记/基础知识.md');
+    expect(questionFile?.path).toMatch(/^题目\/.+\.md$/);
+    expect(knowledgeContents).toContain(`[[${questionPagePath}|${questionPageTitle}]]`);
     expect(knowledgeContents).toContain('![[assets/triangle.svg#preview]]');
     expect(knowledgeContents).toContain('[[assets/triangle.svg|资源文件]]');
     expect(knowledgeContents).toContain('[[assets/triangle.svg|path_name]]');
@@ -239,12 +248,18 @@ describe('OpenQuestionBank Obsidian Vault 导出器', () => {
     expect(knowledgeContents).toContain(
       '```md\n[代码示例](oqb://question/question-single-choice)\n```',
     );
-    expect(exported.files.find(({ path }) => path === 'README.md')?.contents).toContain(
-      '[[topics/README|考点（1）]]',
+    expect(exported.files.find(({ path }) => path === '题库首页.md')?.contents).toContain(
+      '[[考点/索引|考点（1）]]',
     );
+    expect(questionContents).toContain('实体类型: 题目');
+    expect(questionContents).toContain('> [!question]- 显示答案与解析');
+    expect(questionContents).not.toContain('☑');
+    expect(questionContents).not.toContain('☐');
+    expect(questionContents).toContain('**上一题：**');
+    expect(questionContents).toContain('**下一题：**');
     expect(exported.manifest).toMatchObject({
       format: 'openquestionbank-obsidian-vault',
-      formatVersion: '1.0.0',
+      formatVersion: '2.0.0',
       schemaVersion: '1.0.0',
       bank: { id: bank.id, name: bank.name, version: bank.version },
       statistics: {
@@ -253,7 +268,7 @@ describe('OpenQuestionBank Obsidian Vault 导出器', () => {
       },
     });
     expect(exported.manifest.files).toContainEqual({
-      path: 'knowledge/id-knowledge-foundations.md',
+      path: knowledgeFile?.path,
       sizeBytes: Buffer.byteLength(knowledgeContents ?? '', 'utf8'),
       sha256: createHash('sha256')
         .update(knowledgeContents ?? '', 'utf8')
@@ -264,9 +279,49 @@ describe('OpenQuestionBank Obsidian Vault 导出器', () => {
       sizeBytes: assetContents.byteLength,
       sha256: assets[0]?.sha256,
     });
-    expect(exported.files.find(({ path }) => path === 'README.md')?.contents).not.toContain(
+    expect(exported.files.find(({ path }) => path === '题库首页.md')?.contents).not.toContain(
       'GitHub',
     );
+  });
+
+  it('解析中的元数据同名标题仍完整收纳在折叠答案区内', () => {
+    const explanation = [
+      '这是答案解析的开头。',
+      '## 所属考点',
+      '这是解析中的同名标题内容。',
+      '## 标签',
+      '这段解析也必须保持折叠。',
+    ].join('\n\n');
+    const obsidianData: QuestionBankData = {
+      ...data,
+      questions: data.questions.map((question) =>
+        question.id === 'question-single-choice' ? { ...question, explanation } : question,
+      ),
+    };
+    const questionContents = createQuestionBankObsidianVaultExport(obsidianData, assets).files.find(
+      ({ contents }) => contents.includes('题库ID: "question-single-choice"'),
+    )?.contents;
+
+    expect(questionContents).toContain('> [!question]- 显示答案与解析');
+    expect(questionContents).toContain(
+      '> ## 所属考点\n>\n> 这是解析中的同名标题内容。\n>\n> ## 标签\n>\n> 这段解析也必须保持折叠。',
+    );
+  });
+
+  it('生成适用于 Windows 的文件名并消解同类页面标题冲突', () => {
+    const exported = createQuestionBankObsidianVaultExport(
+      {
+        ...data,
+        topics: [{ ...topic, name: 'CON.txt' }],
+      },
+      assets,
+    );
+    const questionPaths = exported.files
+      .filter(({ path }) => path.startsWith('题目/') && path !== '题目/索引.md')
+      .map(({ path }) => path);
+
+    expect(exported.files.map(({ path }) => path)).toContain('考点/考点 CON.txt.md');
+    expect(new Set(questionPaths).size).toBe(data.questions.length);
   });
 
   it('对实体输入顺序变化保持相同输出', () => {
@@ -298,21 +353,32 @@ describe('OpenQuestionBank Obsidian Vault 导出器', () => {
 });
 
 describe('OpenQuestionBank Notion 导入包导出器', () => {
-  it('生成 CSV 数据库、完整 Markdown 页面、稳定 ID 关系映射和发布清单', () => {
+  it('生成题目与答案分离的数据库、练习页面、关系映射和发布清单', () => {
     const exported = createQuestionBankNotionExport(data, assets);
     const topicsCsv = exported.files.find(({ path }) => path === 'databases/topics.csv')?.contents;
     const questionsCsv = exported.files.find(
       ({ path }) => path === 'databases/questions.csv',
     )?.contents;
+    const answersCsv = exported.files.find(
+      ({ path }) => path === 'databases/answers.csv',
+    )?.contents;
     const relationsCsv = exported.files.find(({ path }) => path === 'relations.csv')?.contents;
     const knowledgePage = exported.files.find(
       ({ path }) => path === 'knowledge/id-knowledge-foundations.md',
     )?.contents;
+    const questionPage = exported.files.find(
+      ({ path }) => path === 'questions/id-question-single-choice.md',
+    )?.contents;
 
-    expect(topicsCsv).toContain('id,name,parentId,order,description');
-    expect(topicsCsv).toContain('topic-foundations,基础知识,,0');
-    expect(questionsCsv).toContain('id,type,stemMarkdown,explanationMarkdown');
-    expect(questionsCsv).toContain('""choiceIds"":[""choice-a"",""choice-b""]');
+    expect(topicsCsv).toContain('name,id,parentId,order,description');
+    expect(topicsCsv).toContain('基础知识,topic-foundations,,0');
+    expect(questionsCsv).toContain('title,id,type,typeLabel,stemMarkdown,choicesJson,difficulty');
+    expect(questionsCsv).not.toContain('answerJson');
+    expect(questionsCsv).not.toContain('explanationMarkdown');
+    expect(questionsCsv).toContain('单选题');
+    expect(answersCsv).toContain('title,id,answerJson,explanationMarkdown,entityJson');
+    expect(answersCsv).toContain('这是用于 Schema 测试的通用解析。');
+    expect(questionsCsv).toContain('""id"":""choice-a""');
     expect(relationsCsv).toContain(
       'knowledge,knowledge-foundations,topicIds,topic,topic-foundations,0',
     );
@@ -321,12 +387,20 @@ describe('OpenQuestionBank Notion 导入包导出器', () => {
       'exam,exam-template,rules[0].filters.topicIds,topic,topic-foundations,0',
     );
     expect(knowledgePage).toContain('![三角形示意图](../assets/triangle.svg)');
+    expect(questionPage).toContain('# 以下哪项符合题目要求？');
+    expect(questionPage).toContain('单选题 · 难度：入门 · 分值：1 分');
+    expect(questionPage).toContain('**上一题：**');
+    expect(questionPage).toContain('**下一题：**');
+    expect(questionPage).toContain('练习后可在单独的“答案与解析”数据库中按稳定 ID 查询。');
+    expect(questionPage).not.toContain('## 答案\n');
+    expect(questionPage).not.toContain('## 解析\n');
+    expect(questionPage).not.toContain('选项 A（choice-a）');
     expect(exported.files.find(({ path }) => path === 'README.md')?.contents).toContain(
       '不会自动创建 Notion 原生 Relation 属性',
     );
     expect(exported.manifest).toMatchObject({
       format: 'openquestionbank-notion-import',
-      formatVersion: '1.0.0',
+      formatVersion: '2.0.0',
       schemaVersion: '1.0.0',
       bank: { id: bank.id, name: bank.name, version: bank.version },
       statistics: {
@@ -346,6 +420,30 @@ describe('OpenQuestionBank Notion 导入包导出器', () => {
       sizeBytes: assetContents.byteLength,
       sha256: assets[0]?.sha256,
     });
+  });
+
+  it('解析中的元数据同名标题不会使答案内容泄漏到练习页面', () => {
+    const explanation = [
+      '这是答案解析的开头。',
+      '## 所属考点',
+      '这是解析中的同名标题内容。',
+      '## 标签',
+      '这段解析也必须保持隐藏。',
+    ].join('\n\n');
+    const notionData: QuestionBankData = {
+      ...data,
+      questions: data.questions.map((question) =>
+        question.id === 'question-single-choice' ? { ...question, explanation } : question,
+      ),
+    };
+    const questionContents = createQuestionBankNotionExport(notionData, assets).files.find(
+      ({ path }) => path === 'questions/id-question-single-choice.md',
+    )?.contents;
+
+    expect(questionContents).toContain('练习后可在单独的“答案与解析”数据库中按稳定 ID 查询。');
+    expect(questionContents).not.toContain('这是答案解析的开头。');
+    expect(questionContents).not.toContain('这是解析中的同名标题内容。');
+    expect(questionContents).not.toContain('这段解析也必须保持隐藏。');
   });
 
   it('对实体输入顺序变化保持相同输出', () => {

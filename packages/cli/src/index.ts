@@ -297,7 +297,7 @@ async function exportCommand(
   } else if (format === 'obsidian') {
     const exported = await writeQuestionBankObsidianVaultExport(result.data, root, outputDirectory);
     output.stdout(`Obsidian Vault 导出完成：${exported.outputDirectory}`);
-    output.stdout(`入口文件：${join(exported.outputDirectory, 'README.md')}`);
+    output.stdout(`入口文件：${join(exported.outputDirectory, '题库首页.md')}`);
     output.stdout(`发布清单：${join(exported.outputDirectory, 'manifest.json')}`);
   } else if (format === 'notion') {
     const exported = await writeQuestionBankNotionExport(result.data, root, outputDirectory);

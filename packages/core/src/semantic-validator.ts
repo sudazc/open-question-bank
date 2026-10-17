@@ -17,6 +17,7 @@ export function validateSemantics(bank: LocatedQuestionBank, diagnostics: Diagno
   const groups = uniqueEntityMap(bank.groups, 'QuestionGroup', diagnostics);
   const exams = uniqueEntityMap(bank.exams, 'Exam', diagnostics);
 
+  validateSourceUrls(bank, diagnostics);
   validateTopicReferences(bank, topics, knowledge, diagnostics);
   validateKnowledgeReferences(knowledge, diagnostics);
   validateQuestionReferences(topics, knowledge, questions, diagnostics);
@@ -25,6 +26,47 @@ export function validateSemantics(bank: LocatedQuestionBank, diagnostics: Diagno
   validateMarkdownReferences(bank, topics, knowledge, questions, exams, diagnostics);
   detectTopicCycles([...topics.values()], topics, diagnostics);
   detectKnowledgePrerequisiteCycles([...knowledge.values()], knowledge, diagnostics);
+}
+
+/** 检查非原创来源的链接信息 */
+function validateSourceUrls(bank: LocatedQuestionBank, diagnostics: Diagnostic[]): void {
+  for (const entity of [...bank.knowledge, ...bank.questions, ...bank.groups]) {
+    const source = entity.value.source;
+    if (source.url !== undefined) {
+      if (!isHttpUrl(source.url)) {
+        diagnostics.push({
+          code: 'OQB-SOURCE-002',
+          severity: 'warning',
+          message: '来源链接不是有效的 HTTP 或 HTTPS URL',
+          file: entity.file,
+          entityId: entity.value.id,
+          fieldPath: 'source.url',
+          suggestion: '将 source.url 改为完整的 http:// 或 https:// 地址',
+        });
+      }
+      continue;
+    }
+    if (source.type !== 'original') {
+      diagnostics.push({
+        code: 'OQB-SOURCE-001',
+        severity: 'warning',
+        message: '非原创来源缺少来源链接，难以核实题目或资料出处',
+        file: entity.file,
+        entityId: entity.value.id,
+        fieldPath: 'source.url',
+        suggestion: '填写可访问来源的完整 HTTP 或 HTTPS URL',
+      });
+    }
+  }
+}
+
+function isHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value.trim());
+    return (url.protocol === 'http:' || url.protocol === 'https:') && url.hostname.length > 0;
+  } catch {
+    return false;
+  }
 }
 
 type EntityMap<T> = Map<string, LocatedEntity<T>>;

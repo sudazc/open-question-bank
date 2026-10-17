@@ -1,8 +1,8 @@
 # OpenQuestionBank
 
-OpenQuestionBank 是一个以文件为基础的开源题库与知识库框架，适合考试备考、学校课程、企业培训和个人知识整理。题库内容使用 YAML 和 Markdown 保存，可以通过 Git 进行版本管理、审阅和协作。
+OpenQuestionBank 是一个面向 AI 协作构建题库的开源格式与本地工具框架，适合考试备考、学校课程、企业培训和个人学习。用户可以把项目链接发给 AI，AI 按项目指南询问题库主题与范围，主动查找现成公开题库、官方样题和可靠知识资料，或读取用户提供的题目、题库仓库和学习资料，再生成符合规范的题库。
 
-它提供统一的数据格式和命令行校验工具，帮助维护者检查题目结构、题目与知识点之间的引用、资源文件、审核状态和发布授权。源数据与 GitHub、Obsidian、Notion 等展示平台分离，避免题库被某一个平台锁定。
+本项目提供数据格式、AI 构建指南、题库模板、命令行校验和导出工具。AI 助手负责需求沟通、资料整理和题目编写；OpenQuestionBank 负责把生成的内容组织成可维护的 YAML / Markdown 源文件、发现格式和引用问题，并按需导出为可导入 Obsidian 或 Notion 的文件包。题库内容可通过 Git 版本管理、审阅和协作。
 
 项目目前进入 V1.0 的 P3 阶段：Schema 1.0、Core 读取与校验、题库初始化模板、CLI 校验 / 统计 / 诊断、标准 JSON、GitHub Markdown 阅读包、Obsidian Vault 和 Notion CSV / Markdown 导入包已实现。规则组卷执行、自动评分、在线刷题和学习记录尚未实现。
 
@@ -14,15 +14,15 @@ OpenQuestionBank 是一个以文件为基础的开源题库与知识库框架，
 - 在发布前检查审核状态和内容授权信息
 - 为后续导出或其他工具提供稳定、平台无关的数据源
 
-OpenQuestionBank 是本地运行的软件框架，不提供在线题库网站、用户账号或数据库服务。一个题库可以作为独立 Git 仓库维护，与本框架仓库分开。
+OpenQuestionBank 是本地运行的软件框架，不提供在线题库网站、用户账号或数据库服务，也不内置 AI 模型。资料检索和题目编写由用户选择的 AI 助手完成；本项目提供格式规范、文件模板、校验和导出能力。每个题库可以作为独立 Git 仓库维护，与本框架仓库分开。
 
 ## 快速开始
 
 ### 用 AI 构建题库
 
-可以把 [AI 题库构建指南](AI_GUIDE.md) 或 [OpenQuestionBank 项目主页](https://github.com/sudazc/open-question-bank) 发给 AI 助手。指南会让 AI 先了解项目数据格式，再询问学科方向、适用人群、题源范围、题量、题型、难度和解析需求，然后按 Schema 和模板生成题库并运行校验。
+把 [OpenQuestionBank 项目主页](https://github.com/sudazc/open-question-bank) 或 [AI 题库构建指南](AI_GUIDE.md) 发给 AI 助手即可开始，不需要提前准备主题或资料。AI 会先问你想创建哪方面的题库，再确认适用人群、覆盖范围、题量、题型和难度。你可以提供现成题目、已有题库仓库、教材、讲义、课程大纲或其他资料链接；如果没有资料，AI 会主动搜索现成公开题库、官方样题和权威知识来源，优先收录许可明确允许再发布的题目，并用可靠资料补足题库。
 
-项目链接说明的是题库格式；如果希望题目依据某本教材、课程或已有资料生成，还要另外把资料链接、文件或具体章节范围告诉 AI。资料链接无法访问时，AI 应请你提供内容，而不是假装已经读取。
+AI 会整理并记录实际使用的来源，生成题库源文件，再运行 OpenQuestionBank 校验。来源授权不明确时，AI 不会批量转载题目，而会依据可靠知识资料补充原创题目。完成后可按需导出 Obsidian Vault 或 Notion 导入包。项目链接告诉 AI 如何构建和校验题库；题库内容来自 AI 检索到的题目和知识来源，或你主动提供的资料。AI 无法访问网页或仓库时，会说明情况并请你粘贴或上传内容。
 
 可以这样开始：
 
@@ -30,8 +30,10 @@ OpenQuestionBank 是本地运行的软件框架，不提供在线题库网站、
 请先阅读 OpenQuestionBank 的 AI 构建指南：
 https://github.com/sudazc/open-question-bank/blob/main/AI_GUIDE.md
 
-我想创建一个题库，请先问我需要哪些信息，再按指南生成并校验。资料链接：<填写资料链接；没有资料时写“暂无”>。
+收到这个链接后，请先阅读指南，并先问我想创建哪方面的题库。确认方向后，再问清楚适用人群、覆盖范围、题量和题型。我可能提供现成题目、已有题库仓库或资料链接；如果没有提供资料，请主动查找可访问的权威公开来源并记录链接。请按指南生成并校验题库，最后按我的选择导出为可导入 Obsidian 或 Notion 的文件包。
 ```
+
+AI 交付的核心内容是独立题库目录，其中包含题库配置、考点 / 知识 / 题目文件、来源信息和校验结果。Obsidian Vault 或 Notion 导入包是从这份源数据生成的展示格式；导入 Notion 时由用户选择何时导入单独的答案与解析表。
 
 ### 环境要求
 
@@ -66,7 +68,7 @@ pnpm oqb --help
 pnpm oqb init ./my-question-bank
 ```
 
-`init` 会创建一个可以直接校验的题库示例。如果目标目录不存在，命令会创建它；如果目录已存在，它必须为空。命令不会覆盖已有文件。
+`init` 会创建一个可以直接校验的题库示例，供理解格式和验证工具使用，不是可直接交付的正式题库。如果目标目录不存在，命令会创建它；如果目录已存在，它必须为空。命令不会覆盖已有文件。开始实际建库时，请替换或删除示例题目、知识笔记和考点，并按实际内容修改 `bank.yaml` 中的题库信息与许可证。
 
 ### 校验和查看题库
 
@@ -188,7 +190,7 @@ review:
 | `strict`  | 发布前审核       | 保留全部结构有效实体；内容实体必须为 `approved`，并满足来源授权信息要求。未满足时以错误报告    |
 | `release` | 生成发布候选内容 | 只保留审核通过且授权信息完整的知识、题目和题组；相关不可发布依赖会一并筛除，再校验最终引用关系 |
 
-三种模式的校验细节见 [Core 使用说明](docs/core.md)。`release` 检查许可证和署名信息是否填写，不会判断许可证法律效力或许可证之间的兼容性。官方公开资料不自动代表允许转载。
+三种模式的校验细节见 [Core 使用说明](docs/core.md)。非原创来源缺少来源链接或链接不是 HTTP / HTTPS 时会显示警告；Core 不联网检查链接可访问性。`release` 检查许可证和署名信息是否填写，不会判断许可证法律效力或许可证之间的兼容性。官方公开资料不自动代表允许转载。
 
 ## CLI 命令
 
@@ -241,7 +243,7 @@ pnpm oqb export ../my-question-bank --format github-markdown --out ./dist/my-que
 pnpm oqb export ../my-question-bank --format obsidian --out ./dist/my-question-bank-obsidian
 ```
 
-输出包含题库总览、考点 / 知识 / 题目 / 题组 / 试卷索引、实体独立页面、引用的资源文件和 `manifest.json`。页面按稳定 ID 命名，实体关系及 `oqb://` 正文引用转换为 Obsidian Wiki 链接；图片资源以嵌入链接呈现，其他资源以 Wiki 链接呈现。导出目录可以直接在 Obsidian 中作为 Vault 打开，也可以随目录移动。
+输出包含题库总览、考点 / 知识 / 题目 / 题组 / 试卷索引、实体独立页面、引用的资源文件和 `manifest.json`。页面文件名使用考点名、知识标题、题干或试卷名；稳定 ID 保存在 Obsidian 属性中，实体关系及 `oqb://` 正文引用转换为 Wiki 链接。题目页不在选项上标记正确答案，答案和解析默认折叠，并按稳定 ID 顺序提供上一题 / 下一题导航。图片资源以嵌入链接呈现，其他资源以 Wiki 链接呈现。导出目录可以直接在 Obsidian 中作为 Vault 打开，也可以随目录移动。
 
 `--mode release` 会沿用发布筛选，仅导出审核和授权条件通过且引用关系完整的数据。清单记录题库版本、实体统计，以及每个 Markdown 和资源文件的大小及 SHA-256。使用方法、路径映射和清单格式见 [Obsidian Vault 导出说明](docs/export-obsidian-vault.md)。
 
@@ -253,9 +255,9 @@ pnpm oqb export ../my-question-bank --format obsidian --out ./dist/my-question-b
 pnpm oqb export ../my-question-bank --format notion --out ./dist/my-question-bank-notion
 ```
 
-`databases/` 包含 Bank、考点、知识、题目、题组和试卷六份 CSV；`relations.csv` 按稳定 ID 列出所有实体关联；分类目录内的 Markdown 页面保留完整题干、解析、知识正文和试卷内容，引用的资源会按原路径复制。CSV 中的 `Json` 列保留数组、复杂答案等结构，`manifest.json` 为 CSV、Markdown 和资源记录大小及 SHA-256。
+`databases/` 包含题库、考点、知识、题目、答案与解析、题组和试卷七份 CSV。题目表首列是可读题干标题，选项不标正确答案；答案和解析单独放在 `answers.csv`，练习时可以先不导入。Markdown 题目页也不包含答案正文，并提供上一题 / 下一题导航；知识正文、试卷内容和引用资源会一并导出。`relations.csv` 按稳定 ID 列出实体关联，CSV 中的 `Json` 列保留数组等复杂结构，`manifest.json` 记录 CSV、Markdown 和资源的大小及 SHA-256。
 
-在 Notion 中分别导入 CSV 可创建对应数据库。`relations.csv` 是供人工核对和建立 Relation 属性的映射表，导出器不会自动创建 Notion 原生双向关系，也不会自动连接记录；具体导入步骤、字段说明和关系表格式见 [Notion 导入说明](docs/export-notion-import.md)。
+在 Notion 中分别导入 CSV 可创建对应数据库。建议先导入题目表用于练习，完成后再导入答案表；题目表中的 `typeLabel` 是中文题型名，`type` 保留 Schema 使用的机器值。`relations.csv` 是供人工核对和建立 Relation 属性的映射表，导出器不会自动创建 Notion 原生双向关系，也不会自动连接记录；具体导入步骤、字段说明和关系表格式见 [Notion 导入说明](docs/export-notion-import.md)。
 
 ## 建议的维护流程
 

@@ -3,22 +3,34 @@ import type { QuestionBankData } from '@openquestionbank/core';
 import { normalizeExportAssets, type ExportAsset } from './export-common.js';
 import {
   createQuestionBankGithubMarkdownExport,
+  getQuestionAnswerSectionMarkers,
+  getQuestionBankGithubMarkdownEntityFilePath,
   getQuestionBankGithubMarkdownFilePaths,
 } from './github-markdown.js';
 import type { ExportFile } from './export-writer.js';
 
 const format = 'openquestionbank-notion-import';
-const formatVersion = '1.0.0';
+const formatVersion = '2.0.0';
 const databasePaths = [
   'databases/bank.csv',
   'databases/topics.csv',
   'databases/knowledge.csv',
   'databases/questions.csv',
+  'databases/answers.csv',
   'databases/groups.csv',
   'databases/exams.csv',
 ] as const;
 
 type EntityType = 'topic' | 'knowledge' | 'question' | 'group' | 'exam';
+
+const questionTypeLabels: Record<QuestionEntity['type'], string> = {
+  single_choice: '单选题',
+  multiple_choice: '多选题',
+  true_false: '判断题',
+  fill_blank: '填空题',
+  numeric: '数值题',
+  short_answer: '简答题',
+};
 
 interface NotionRelation {
   sourceType: EntityType;
@@ -27,6 +39,13 @@ interface NotionRelation {
   targetType: EntityType;
   targetId: string;
   position: number | '';
+}
+
+type QuestionEntity = QuestionBankData['questions'][number];
+
+interface QuestionNavigation {
+  previous: QuestionEntity | undefined;
+  next: QuestionEntity | undefined;
 }
 
 export interface NotionExportManifest {
@@ -66,12 +85,27 @@ export function createQuestionBankNotionExport(
 
   const normalizedAssets = normalizeExportAssets(data, assets);
   const markdownExport = createQuestionBankGithubMarkdownExport(data, normalizedAssets);
-  const markdownFiles = markdownExport.files.filter(
-    ({ path }) => path !== 'README.md' && path !== 'manifest.json',
+  const navigationByQuestionId = createQuestionNavigationMap(data.questions);
+  const questionsByPath = new Map(
+    data.questions.map((question) => [
+      getQuestionBankGithubMarkdownEntityFilePath('question', question.id),
+      question,
+    ]),
   );
+  const markdownFiles = markdownExport.files
+    .filter(({ path }) => path !== 'README.md' && path !== 'manifest.json')
+    .map(({ path, contents }) => {
+      const question = questionsByPath.get(path);
+      return {
+        path,
+        contents: question
+          ? prepareNotionQuestionPage(contents, question, navigationByQuestionId.get(question.id))
+          : contents,
+      };
+    });
   const contentFiles: ExportFile[] = [
     { path: 'README.md', contents: renderReadme(data, normalizedAssets) },
-    ...renderDatabaseFiles(data),
+    ...renderDatabaseFiles(data, navigationByQuestionId),
     { path: 'relations.csv', contents: renderRelationsCsv(data) },
     ...markdownFiles,
   ].sort((left, right) => compareStrings(left.path, right.path));
@@ -124,7 +158,10 @@ export function getQuestionBankNotionFilePaths(data: QuestionBankData): string[]
   ].sort(compareStrings);
 }
 
-function renderDatabaseFiles(data: QuestionBankData): ExportFile[] {
+function renderDatabaseFiles(
+  data: QuestionBankData,
+  navigationByQuestionId: ReadonlyMap<string, QuestionNavigation>,
+): ExportFile[] {
   const bank = data.bank;
   if (!bank) {
     throw new Error('Notion 导出要求存在有效的 Bank 实体');
@@ -141,8 +178,8 @@ function renderDatabaseFiles(data: QuestionBankData): ExportFile[] {
       path: 'databases/bank.csv',
       contents: renderCsv(
         [
-          'id',
           'name',
+          'id',
           'description',
           'version',
           'schemaVersion',
@@ -156,8 +193,8 @@ function renderDatabaseFiles(data: QuestionBankData): ExportFile[] {
         ],
         [
           [
-            bank.id,
             bank.name,
+            bank.id,
             bank.description,
             bank.version,
             bank.schemaVersion,
@@ -176,8 +213,8 @@ function renderDatabaseFiles(data: QuestionBankData): ExportFile[] {
       path: 'databases/topics.csv',
       contents: renderCsv(
         [
-          'id',
           'name',
+          'id',
           'parentId',
           'order',
           'description',
@@ -186,8 +223,8 @@ function renderDatabaseFiles(data: QuestionBankData): ExportFile[] {
           'entityJson',
         ],
         topics.map((entity) => [
-          entity.id,
           entity.name,
+          entity.id,
           entity.parentId,
           entity.order,
           entity.description,
@@ -201,8 +238,8 @@ function renderDatabaseFiles(data: QuestionBankData): ExportFile[] {
       path: 'databases/knowledge.csv',
       contents: renderCsv(
         [
-          'id',
           'title',
+          'id',
           'summary',
           'bodyMarkdown',
           'topicIdsJson',
@@ -216,8 +253,8 @@ function renderDatabaseFiles(data: QuestionBankData): ExportFile[] {
           'entityJson',
         ],
         knowledge.map((entity) => [
-          entity.id,
           entity.title,
+          entity.id,
           entity.summary,
           entity.body,
           jsonCell(entity.topicIds),
@@ -236,39 +273,63 @@ function renderDatabaseFiles(data: QuestionBankData): ExportFile[] {
       path: 'databases/questions.csv',
       contents: renderCsv(
         [
+          'title',
           'id',
           'type',
+          'typeLabel',
           'stemMarkdown',
-          'explanationMarkdown',
           'choicesJson',
-          'answerJson',
           'difficulty',
           'topicIdsJson',
           'knowledgeIdsJson',
           'tagsJson',
           'score',
+          'previousId',
+          'previousTitle',
+          'nextId',
+          'nextTitle',
           'sourceJson',
           'reviewJson',
           'assetsJson',
           'extensionsJson',
-          'entityJson',
+          'questionJson',
         ],
+        questions.map((entity) => {
+          const navigation = navigationByQuestionId.get(entity.id);
+          return [
+            questionTitle(entity.stem),
+            entity.id,
+            entity.type,
+            questionTypeLabels[entity.type],
+            entity.stem,
+            'choices' in entity ? jsonCell(entity.choices) : '',
+            entity.difficulty,
+            jsonCell(entity.topicIds),
+            jsonCell(entity.knowledgeIds),
+            jsonCell(entity.tags),
+            entity.score,
+            navigation?.previous?.id,
+            navigation?.previous ? questionTitle(navigation.previous.stem) : '',
+            navigation?.next?.id,
+            navigation?.next ? questionTitle(navigation.next.stem) : '',
+            jsonCell(entity.source),
+            jsonCell(entity.review),
+            jsonCell(entity.assets),
+            jsonCell(entity.extensions),
+            questionJsonWithoutAnswers(entity),
+          ];
+        }),
+      ),
+    },
+    {
+      path: 'databases/answers.csv',
+      contents: renderCsv(
+        ['title', 'id', 'answerJson', 'explanationMarkdown', 'entityJson'],
         questions.map((entity) => [
+          questionTitle(entity.stem),
           entity.id,
-          entity.type,
-          entity.stem,
-          entity.explanation,
-          'choices' in entity ? jsonCell(entity.choices) : '',
           jsonCell(entity.answer),
-          entity.difficulty,
-          jsonCell(entity.topicIds),
-          jsonCell(entity.knowledgeIds),
-          jsonCell(entity.tags),
-          entity.score,
-          jsonCell(entity.source),
-          jsonCell(entity.review),
-          jsonCell(entity.assets),
-          jsonCell(entity.extensions),
+          entity.explanation,
           jsonCell(entity),
         ]),
       ),
@@ -277,8 +338,8 @@ function renderDatabaseFiles(data: QuestionBankData): ExportFile[] {
       path: 'databases/groups.csv',
       contents: renderCsv(
         [
-          'id',
           'title',
+          'id',
           'passageMarkdown',
           'questionIdsJson',
           'topicIdsJson',
@@ -290,8 +351,8 @@ function renderDatabaseFiles(data: QuestionBankData): ExportFile[] {
           'entityJson',
         ],
         groups.map((entity) => [
-          entity.id,
           entity.title,
+          entity.id,
           entity.passage,
           jsonCell(entity.questionIds),
           jsonCell(entity.topicIds),
@@ -308,8 +369,8 @@ function renderDatabaseFiles(data: QuestionBankData): ExportFile[] {
       path: 'databases/exams.csv',
       contents: renderCsv(
         [
-          'id',
           'title',
+          'id',
           'mode',
           'kind',
           'description',
@@ -323,8 +384,8 @@ function renderDatabaseFiles(data: QuestionBankData): ExportFile[] {
           'entityJson',
         ],
         exams.map((entity) => [
-          entity.id,
           entity.title,
+          entity.id,
           entity.mode,
           'kind' in entity ? entity.kind : '',
           entity.description,
@@ -340,6 +401,110 @@ function renderDatabaseFiles(data: QuestionBankData): ExportFile[] {
       ),
     },
   ];
+}
+
+function createQuestionNavigationMap(
+  questions: readonly QuestionEntity[],
+): Map<string, QuestionNavigation> {
+  const orderedQuestions = sortById(questions);
+  return new Map(
+    orderedQuestions.map((question, index) => [
+      question.id,
+      { previous: orderedQuestions[index - 1], next: orderedQuestions[index + 1] },
+    ]),
+  );
+}
+
+function prepareNotionQuestionPage(
+  markdown: string,
+  question: QuestionEntity,
+  navigation: QuestionNavigation | undefined,
+): string {
+  let result = markdown.replace(/^# .+$/m, '# ' + questionTitle(question.stem));
+  const identityLine = /^> (稳定 ID：.*?)(?: · (.*))?$/m.exec(result);
+  if (identityLine?.[2]) {
+    const details = identityLine[2].split(' · ');
+    details[0] = questionTypeLabels[question.type];
+    if (details[1]) {
+      details[1] = '难度：' + details[1];
+    }
+    if (details.length > 2) {
+      details[2] = '分值：' + details.slice(2).join(' · ');
+      details.length = 3;
+    }
+    result = result.replace(identityLine[0], '> ' + identityLine[1] + ' · ' + details.join(' · '));
+  }
+
+  const optionsHeading = '\n## 选项\n';
+  const optionsStart = result.indexOf(optionsHeading);
+  if (optionsStart >= 0) {
+    const contentStart = optionsStart + optionsHeading.length;
+    const nextHeading = result.indexOf('\n## ', contentStart);
+    const optionsEnd = nextHeading < 0 ? result.length : nextHeading;
+    const options = result.slice(contentStart, optionsEnd).replace(/^- [☑☐] /gm, '- ');
+    result = result.slice(0, contentStart) + options + result.slice(optionsEnd);
+  }
+
+  result = omitQuestionAnswer(result, question.id);
+  const previous = navigation?.previous;
+  const next = navigation?.next;
+  const previousLink = previous
+    ? '[' +
+      escapeMarkdownLinkTitle(questionTitle(previous.stem)) +
+      '](' +
+      getQuestionBankGithubMarkdownEntityFilePath('question', previous.id).split('/').at(-1) +
+      ')'
+    : '无';
+  const nextLink = next
+    ? '[' +
+      escapeMarkdownLinkTitle(questionTitle(next.stem)) +
+      '](' +
+      getQuestionBankGithubMarkdownEntityFilePath('question', next.id).split('/').at(-1) +
+      ')'
+    : '无';
+  const navigationLine = '> **上一题：** ' + previousLink + '　｜　**下一题：** ' + nextLink;
+  return result.replace(/^(# .+)$/m, '$1\n\n' + navigationLine);
+}
+
+function omitQuestionAnswer(markdown: string, questionId: string): string {
+  const markers = getQuestionAnswerSectionMarkers(questionId);
+  const start = markdown.indexOf(markers.start);
+  const contentStart = start + markers.start.length;
+  const end = start < 0 ? -1 : markdown.indexOf(markers.end, contentStart);
+  if (start < 0 || end < 0) {
+    throw new Error(`无法定位题目 ${questionId} 的答案区域，已取消 Notion 导出`);
+  }
+
+  const before = markdown.slice(0, start).trimEnd();
+  const after = markdown.slice(end + markers.end.length).trimStart();
+  const reminder = '## 答案与解析\n\n练习后可在单独的“答案与解析”数据库中按稳定 ID 查询。';
+  return before + '\n\n' + reminder + (after ? '\n\n' + after : '');
+}
+
+function questionTitle(stem: string): string {
+  const plainText = stem
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/^\s{0,3}#{1,6}\s*/gm, '')
+    .replace(/[*_~]/g, '')
+    .replace(/\\([\\_*{}[\]()#+.!<>|])/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(String.fromCharCode(96))
+    .join('');
+  const characters = [...plainText];
+  return characters.length > 56 ? characters.slice(0, 55).join('') + '…' : plainText;
+}
+
+function questionJsonWithoutAnswers(question: QuestionEntity): string {
+  const data = Object.fromEntries(
+    Object.entries(question).filter(([key]) => key !== 'answer' && key !== 'explanation'),
+  );
+  return jsonCell(data);
+}
+
+function escapeMarkdownLinkTitle(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/\[/g, '\\[').replace(/\]/g, '\\]');
 }
 
 function renderRelationsCsv(data: QuestionBankData): string {
@@ -463,20 +628,22 @@ function renderReadme(data: QuestionBankData, assets: readonly ExportAsset[]): s
     '## 导入步骤',
     '',
     '1. 将整个导出目录解压到本地，先保留 `manifest.json` 以核对文件和题库版本。',
-    '2. 在 Notion 中分别导入 `databases/` 内的六个 CSV。每个 CSV 对应一个数据库；保留 `id` 列作为稳定标识，不要把它当作 Notion 自动生成的页面 ID。',
-    '3. CSV 中以 `Json` 结尾的列及 `entityJson` 列是 JSON 文本。简单属性可直接筛选；完整结构和不常用字段保存在 `entityJson` 中。',
-    '4. 需要阅读完整正文时，再将相应 Markdown 文件导入为页面。知识、题目、题组、考点和试卷页面按目录分类，文件名包含稳定 ID。',
-    '5. 将 `relations.csv` 导入为映射表。按 `sourceType` / `sourceId` 找到来源记录，按 `targetType` / `targetId` 找到目标记录，再在 Notion 数据库中手动建立所需的 Relation 属性。',
+    '2. 先导入 `databases/questions.csv` 创建题目数据库。第一列 `title` 是可读题名，`id` 是 OpenQuestionBank 稳定 ID；`type` 是 Schema 机器值，`typeLabel` 是中文题型名。题目选项、题干和导航字段可用于练习，导航按稳定 ID 排序，首题和末题对应字段为空。答案不在此表中。',
+    '3. 练习完成后再导入 `databases/answers.csv`。该表单独保存答案、解析和完整实体 JSON，可按 `id` 与题目数据库对应；暂时不需要查看答案时，可以先不导入这张表。',
+    '4. 按需导入 `databases/` 中其余 CSV；每个 CSV 对应一个数据库，各实体表以 `name` 或 `title` 作为首列，`id` 保留稳定标识。',
+    '5. CSV 中以 `Json` 结尾的列、`questionJson` 和 `entityJson` 是 JSON 文本。题目数据库中的 `questionJson` 已排除答案和解析；完整题目实体保存在答案表的 `entityJson` 中。',
+    '6. 需要阅读完整正文时，再将相应 Markdown 文件导入为页面。题目页不含答案正文，并提供上一题 / 下一题文件链接。',
+    '7. 将 `relations.csv` 导入为映射表。按 `sourceType` / `sourceId` 找到来源记录，按 `targetType` / `targetId` 找到目标记录，再在 Notion 数据库中手动建立所需的 Relation 属性。',
     '',
     '## 关系映射',
     '',
-    '`relations.csv` 使用稳定 ID 描述题库中的跨实体关联。`field` 是源实体中的字段路径；数组关系的 `position` 从 0 开始，单值关系留空。试卷中的嵌套关系会在 `field` 中包含数组下标。',
+    '`relations.csv` 使用稳定 ID 描述题库中的跨实体关联。`field` 是源实体中的字段路径；数组关系的 `position` 从 0 开始，单值关系留空。试卷中的嵌套关系会在 `field` 中包含数组下标。题目表的 `previousId` / `nextId` 列也可用于手动建立题目间的前后 Relation。',
     '',
     'Notion 的原生 Relation 需要在 Notion 数据库内配置并连接记录。本文件只提供可核对的关系清单，不会自动转换成双向 Relation；导入后是否建立 Relation 以及属性名称由使用者决定。',
     '',
     '## 文件说明',
     '',
-    '- `databases/*.csv`：Bank、考点、知识、题目、题组和试卷的表格数据',
+    '- `databases/*.csv`：题库、考点、知识、题目、答案与解析、题组和试卷的表格数据；题目表与答案表分开导入',
     '- `relations.csv`：跨实体关系映射，包含数组顺序和试卷嵌套路径',
     '- `topics/`、`knowledge/`、`questions/`、`groups/`、`exams/`：适合阅读和导入为页面的 Markdown 文件及分类索引',
     `- 资源文件：${assets.length} 个引用资源，保留题库中的相对路径`,

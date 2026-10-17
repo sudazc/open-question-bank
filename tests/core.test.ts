@@ -51,6 +51,44 @@ describe('OpenQuestionBank Core', () => {
     ).toBe(true);
   });
 
+  it('提示非原创来源缺少或使用无效来源链接，但不阻止草稿校验', async () => {
+    await writeFile(
+      join(rootDir, 'questions/one.yaml'),
+      questionYaml('q-one', 'k-one').replace(
+        'source: { type: original }',
+        'source: { type: official_public }',
+      ),
+    );
+    await writeFile(
+      join(rootDir, 'questions/two.yaml'),
+      questionYaml('q-two', 'k-two').replace(
+        'source: { type: original }',
+        'source: { type: licensed, url: "ftp://example.com/question" }',
+      ),
+    );
+
+    const result = await validateQuestionBankDirectory(rootDir);
+    const sourceDiagnostics = result.diagnostics.filter(({ code }) =>
+      code.startsWith('OQB-SOURCE-'),
+    );
+
+    expect(result.valid).toBe(true);
+    expect(sourceDiagnostics).toMatchObject([
+      {
+        code: 'OQB-SOURCE-001',
+        severity: 'warning',
+        entityId: 'q-one',
+        fieldPath: 'source.url',
+      },
+      {
+        code: 'OQB-SOURCE-002',
+        severity: 'warning',
+        entityId: 'q-two',
+        fieldPath: 'source.url',
+      },
+    ]);
+  });
+
   it('release 模式筛除未授权内容及依赖它们的题目、题组和试卷', async () => {
     const firstKnowledge = knowledgeMarkdown('k-one', '', '').replace(
       '正文和引用 [关联知识](oqb://knowledge/)。',

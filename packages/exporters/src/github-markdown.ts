@@ -293,6 +293,15 @@ function renderQuestionFiles(
 ): ExportFile[] {
   return questions.map((question) => {
     const path = entityFilePath('question', question.id);
+    const answerMarkers = getQuestionAnswerSectionMarkers(question.id);
+    const answerSection = [
+      answerMarkers.start,
+      `## 答案\n\n${renderQuestionAnswer(question)}`,
+      ...(question.explanation
+        ? [`## 解析\n\n${rewriteMarkdown(question.explanation, path, assets, targets)}`]
+        : []),
+      answerMarkers.end,
+    ].join('\n\n');
     const sections = [
       `# ${escapeMarkdownHeading(singleLine(question.stem))}`,
       renderIdentity(
@@ -301,10 +310,7 @@ function renderQuestionFiles(
       ),
       `## 题干\n\n${rewriteMarkdown(question.stem, path, assets, targets)}`,
       renderQuestionChoices(question),
-      `## 答案\n\n${renderQuestionAnswer(question)}`,
-      ...(question.explanation
-        ? [`## 解析\n\n${rewriteMarkdown(question.explanation, path, assets, targets)}`]
-        : []),
+      answerSection,
       renderEntityLinks('所属考点', question.topicIds, 'topic', path, targets),
       renderEntityLinks('关联知识', question.knowledgeIds, 'knowledge', path, targets),
       renderTags(question.tags),
@@ -626,6 +632,23 @@ function entityFilePath(kind: EntityKind, id: string): string {
     exam: 'exams',
   }[kind];
   return `${directory}/${entityFilename(id)}`;
+}
+
+/** 根据实体类型和稳定 ID 获取 GitHub Markdown 阅读包中的页面路径 */
+export function getQuestionBankGithubMarkdownEntityFilePath(kind: EntityKind, id: string): string {
+  return entityFilePath(kind, id);
+}
+
+/** 获取题目答案区域的内部标记 */
+export function getQuestionAnswerSectionMarkers(questionId: string): {
+  start: string;
+  end: string;
+} {
+  const key = createHash('sha256').update(questionId, 'utf8').digest('hex').slice(0, 16);
+  return {
+    start: `<!-- oqb:question-answer:${key}:start -->`,
+    end: `<!-- oqb:question-answer:${key}:end -->`,
+  };
 }
 
 function entityFilename(id: string): string {
