@@ -1,5 +1,6 @@
 import type { Diagnostic } from './diagnostics.js';
 import { extractMarkdownDestinations, maskMarkdownCode } from './asset-validator.js';
+import { decodeHtmlCharacterReferences } from './html-entities.js';
 import type { LocatedQuestionBank } from './types.js';
 
 interface ContentField {
@@ -186,7 +187,7 @@ function isSafeHtmlTag(tag: string): boolean {
 }
 
 function isUnsafeDestination(destination: string): boolean {
-  const decoded = decodeRelevantHtmlEntities(decodeMarkdownBackslashEscapes(destination));
+  const decoded = decodeHtmlCharacterReferences(decodeMarkdownBackslashEscapes(destination));
   let compact = '';
   for (const character of decoded) {
     const codePoint = character.codePointAt(0) ?? 0;
@@ -200,20 +201,4 @@ function isUnsafeDestination(destination: string): boolean {
 
 function decodeMarkdownBackslashEscapes(value: string): string {
   return value.replace(/\\([\u0021-\u002f\u003a-\u0040\u005b-\u0060\u007b-\u007e])/g, '$1');
-}
-
-function decodeRelevantHtmlEntities(value: string): string {
-  return value
-    .replace(/&colon;/gi, ':')
-    .replace(/&tab;/gi, '\t')
-    .replace(/&newline;/gi, '\n')
-    .replace(
-      /&#(?:x([0-9a-f]+)|(\d+));?/gi,
-      (entity, hex: string | undefined, decimal: string | undefined) => {
-        const codePoint = Number.parseInt(hex ?? decimal ?? '', hex ? 16 : 10);
-        return Number.isInteger(codePoint) && codePoint >= 0 && codePoint <= 0x10ffff
-          ? String.fromCodePoint(codePoint)
-          : entity;
-      },
-    );
 }

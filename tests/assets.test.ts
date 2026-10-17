@@ -54,6 +54,20 @@ describe('Core 资源校验', () => {
     expect(result.diagnostics).toEqual([]);
   });
 
+  it('解码 HTML 字符引用后校验资源文件名', async () => {
+    const assetPath = 'assets/diagram&guide.svg';
+    await writeFile(
+      join(rootDir, 'knowledge/note.md'),
+      knowledgeMarkdown([assetPath], '![图](<assets/diagram&amp;guide.svg>)'),
+    );
+    await writeFile(join(rootDir, assetPath), '<svg/>');
+
+    const result = await validateQuestionBankDirectory(rootDir);
+
+    expect(result.valid, JSON.stringify(result.diagnostics, null, 2)).toBe(true);
+    expect(result.diagnostics).toEqual([]);
+  });
+
   it('检查块引用中的引用式资源链接定义', async () => {
     await writeFile(
       join(rootDir, 'knowledge/note.md'),
@@ -163,6 +177,24 @@ describe('Core 资源校验', () => {
 
     expect(result.valid).toBe(false);
     expect(result.diagnostics.some(({ code }) => code === 'OQB-ASSET-001')).toBe(true);
+  });
+
+  it('在检查资源目录边界前解码 HTML 分隔符和点号', async () => {
+    await writeFile(
+      join(rootDir, 'knowledge/note.md'),
+      knowledgeMarkdown(
+        [],
+        [
+          '![分隔符路径](<assets&sol;..&sol;outside.svg>)',
+          '![点号路径](<assets/&period;&period;/outside.svg>)',
+        ].join(' '),
+      ),
+    );
+
+    const result = await validateQuestionBankDirectory(rootDir);
+
+    expect(result.valid).toBe(false);
+    expect(result.diagnostics.filter(({ code }) => code === 'OQB-ASSET-001')).toHaveLength(2);
   });
 
   it('拒绝包含事件处理器的 SVG 资源', async () => {

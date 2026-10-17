@@ -8,7 +8,7 @@ import type {
   QuestionGroup,
   Topic,
 } from '@openquestionbank/schema';
-import type { QuestionBankData } from '@openquestionbank/core';
+import { decodeHtmlCharacterReferences, type QuestionBankData } from '@openquestionbank/core';
 import {
   assertUniquePortableExportPaths,
   normalizeExportAssets,
@@ -571,11 +571,7 @@ function rewriteMarkdown(
         `(^|[^A-Za-z0-9_./-])(${escapeRegExp(variant)})(?=$|[?#)\\s>])`,
         'gm',
       );
-      contents = replaceMarkdownMatches(
-        contents,
-        pattern,
-        (match) => `${match[1] ?? ''}${destination}`,
-      );
+      contents = replaceMarkdownMatches(contents, pattern, () => destination, 1);
     }
   }
 
@@ -601,18 +597,68 @@ function replaceMarkdownMatches(
   markdown: string,
   pattern: RegExp,
   replace: (match: RegExpMatchArray) => string,
+  prefixGroup = 0,
 ): string {
-  const visibleMarkdown = maskMarkdownCode(markdown);
-  const matches = [...visibleMarkdown.matchAll(pattern)];
+  const visibleMarkdown = createEntityDecodedSearchView(markdown);
+  const matches = [...visibleMarkdown.text.matchAll(pattern)];
   let result = markdown;
   for (const match of matches.reverse()) {
     const start = match.index;
-    if (start === undefined) {
+    const targetStart =
+      start === undefined
+        ? undefined
+        : start + (prefixGroup === 0 ? 0 : (match[prefixGroup]?.length ?? 0));
+    const end = start === undefined ? undefined : start + match[0].length;
+    const sourceStart =
+      targetStart === undefined ? undefined : visibleMarkdown.sourceStarts[targetStart];
+    const sourceEnd =
+      end === undefined || end === 0 ? undefined : visibleMarkdown.sourceEnds[end - 1];
+    if (sourceStart === undefined || sourceEnd === undefined) {
       continue;
     }
-    result = `${result.slice(0, start)}${replace(match)}${result.slice(start + match[0].length)}`;
+    result = `${result.slice(0, sourceStart)}${replace(match)}${result.slice(sourceEnd)}`;
   }
   return result;
+}
+
+function createEntityDecodedSearchView(markdown: string): {
+  text: string;
+  sourceStarts: number[];
+  sourceEnds: number[];
+} {
+  const masked = maskMarkdownCode(markdown);
+  let text = '';
+  const sourceStarts: number[] = [];
+  const sourceEnds: number[] = [];
+
+  const append = (value: string, sourceStart: number, sourceEnd: number): void => {
+    text += value;
+    for (let index = 0; index < value.length; index += 1) {
+      sourceStarts.push(sourceStart);
+      sourceEnds.push(sourceEnd);
+    }
+  };
+
+  for (let index = 0; index < markdown.length;) {
+    if (markdown[index] === '&' && masked[index] === '&') {
+      const entity = /^&(?:#[xX][0-9a-fA-F]+;?|#\d+;?|[A-Za-z][A-Za-z0-9]+;)/.exec(
+        markdown.slice(index),
+      )?.[0];
+      if (entity) {
+        const decoded = decodeHtmlCharacterReferences(entity);
+        if (decoded !== entity) {
+          append(decoded, index, index + entity.length);
+          index += entity.length;
+          continue;
+        }
+      }
+    }
+
+    append(masked[index] ?? '', index, index + 1);
+    index += 1;
+  }
+
+  return { text, sourceStarts, sourceEnds };
 }
 
 function entityMarkdownLink(

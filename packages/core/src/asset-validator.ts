@@ -2,6 +2,7 @@ import { lstat, open, realpath } from 'node:fs/promises';
 import { relative, resolve, sep } from 'node:path';
 import { TextDecoder } from 'node:util';
 import type { Diagnostic } from './diagnostics.js';
+import { decodeHtmlCharacterReferences } from './html-entities.js';
 
 interface AssetEntity {
   file: string;
@@ -223,7 +224,7 @@ function normalizeResourcePath(value: string): string | undefined {
 function normalizeMarkdownResourcePath(
   destination: string,
 ): { kind: 'ignored' } | { kind: 'invalid' } | { kind: 'path'; path: string } {
-  const unescaped = unescapeMarkdownDestination(destination);
+  const unescaped = decodeHtmlCharacterReferences(unescapeMarkdownDestination(destination));
   const queryIndex = unescaped.indexOf('?');
   const fragmentIndex = unescaped.indexOf('#');
   const suffixIndex = [queryIndex, fragmentIndex]

@@ -215,6 +215,48 @@ describe('OpenQuestionBank GitHub Markdown 导出器', () => {
     expect(exported.files.find(({ path }) => path === 'manifest.json')?.contents).toMatch(/\n$/);
   });
 
+  it('解码 HTML 字符引用并改写内联与引用式资源链接', () => {
+    const assetPath = 'assets/diagram&guide.svg';
+    const linkedData: QuestionBankData = {
+      ...data,
+      knowledge: [
+        {
+          ...knowledge,
+          assets: [assetPath],
+          body: [
+            '![图](<assets/diagram&amp;guide.svg?view=raw#preview>)',
+            '[diagram]: <&#97;ssets&sol;diagram&#38;guide&period;svg>',
+            '[图][diagram]',
+          ].join('\n\n'),
+        },
+      ],
+    };
+    const imageBytes = new TextEncoder().encode('<svg/>');
+    const imageAsset = {
+      path: assetPath,
+      sizeBytes: imageBytes.byteLength,
+      sha256: createHash('sha256').update(imageBytes).digest('hex'),
+    };
+    const githubExport = createQuestionBankGithubMarkdownExport(linkedData, [imageAsset]);
+    const githubKnowledge = githubExport.files.find(
+      ({ path }) => path === 'knowledge/id-knowledge-foundations.md',
+    )?.contents;
+    const obsidianExport = createQuestionBankObsidianVaultExport(linkedData, [imageAsset]);
+    const obsidianKnowledge = obsidianExport.files.find(
+      ({ path }) => path === '知识笔记/基础知识.md',
+    )?.contents;
+    const notionExport = createQuestionBankNotionExport(linkedData, [imageAsset]);
+    const notionKnowledge = notionExport.files.find(
+      ({ path }) => path === 'knowledge/id-knowledge-foundations.md',
+    )?.contents;
+
+    expect(githubKnowledge).toContain('![图](<../assets/diagram%26guide.svg?view=raw#preview>)');
+    expect(githubKnowledge).toContain('[diagram]: <../assets/diagram%26guide.svg>');
+    expect(obsidianKnowledge).toContain('![[assets/diagram&guide.svg#preview]]');
+    expect(obsidianKnowledge).toContain('[diagram]: <../assets/diagram%26guide.svg>');
+    expect(notionKnowledge).toContain('![图](<../assets/diagram%26guide.svg?view=raw#preview>)');
+  });
+
   it('对实体输入顺序变化保持相同输出', () => {
     const reordered = createQuestionBankGithubMarkdownExport(
       {

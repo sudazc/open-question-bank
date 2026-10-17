@@ -6,6 +6,7 @@
   "dependencies": {
     "@openquestionbank/schema": "workspace:*",
     "ajv": "8.20.0",
+    "entities": "6.0.1",
     "yaml": "2.8.1"
   },
   "exports": {
