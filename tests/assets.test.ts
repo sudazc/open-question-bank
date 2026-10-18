@@ -192,6 +192,42 @@ describe('Core 资源校验', () => {
     expect(await readFile(join(outputDir, assetPath), 'utf8')).toBe(safeSvg);
   });
 
+  it('资源校验失败时保留上一版全部资源', async () => {
+    const firstAssetPath = 'assets/first.bin';
+    const lastAssetPath = 'assets/last.svg';
+    const outputDir = join(rootDir, 'svg-export');
+    const firstSourcePath = join(rootDir, firstAssetPath);
+    const lastSourcePath = join(rootDir, lastAssetPath);
+    const safeSvg = `<svg>${' '.repeat(11)}</svg>`;
+    const unsafeSvg = '<svg onload="x"></svg>';
+    const data: QuestionBankData = {
+      bank,
+      topics: [],
+      knowledge: [
+        {
+          ...knowledge,
+          body: '![数据](assets/first.bin) ![图片](assets/last.svg)',
+          assets: [firstAssetPath, lastAssetPath],
+        },
+      ],
+      questions: [],
+      groups: [],
+      exams: [],
+    };
+    await writeFile(firstSourcePath, 'old');
+    await writeFile(lastSourcePath, safeSvg);
+    const sources = await collectExportAssetSources(rootDir, data, bank);
+    await mkdir(outputDir);
+    await copyExportAssets(sources, outputDir);
+
+    await writeFile(firstSourcePath, 'new');
+    await writeFile(lastSourcePath, unsafeSvg);
+    await expect(copyExportAssets(sources, outputDir)).rejects.toThrow('事件处理属性');
+
+    expect(await readFile(join(outputDir, firstAssetPath), 'utf8')).toBe('old');
+    expect(await readFile(join(outputDir, lastAssetPath), 'utf8')).toBe(safeSvg);
+  });
+
   it('解码 HTML 字符引用后校验资源文件名', async () => {
     const assetPath = 'assets/diagram&guide.svg';
     await writeFile(

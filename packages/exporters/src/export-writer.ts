@@ -177,46 +177,58 @@ export async function copyExportAssets(
   outputRoot: string,
 ): Promise<ExportAsset[]> {
   const assets: ExportAsset[] = [];
-  for (const source of sources) {
-    await prepareExportParent(outputRoot, source.path);
-    const target = join(outputRoot, ...source.path.split('/'));
-    try {
-      const metadata = await lstat(target);
-      if (metadata.isSymbolicLink() || !metadata.isFile()) {
-        throw new Error(`导出资源目标不是普通文件：${target}`);
+  const stagedFiles: Array<{ target: string; temporary: string }> = [];
+  try {
+    for (const source of sources) {
+      await prepareExportParent(outputRoot, source.path);
+      const target = join(outputRoot, ...source.path.split('/'));
+      try {
+        const metadata = await lstat(target);
+        if (metadata.isSymbolicLink() || !metadata.isFile()) {
+          throw new Error(`导出资源目标不是普通文件：${target}`);
+        }
+      } catch (error) {
+        if (!isMissingPath(error)) {
+          throw error;
+        }
       }
-    } catch (error) {
-      if (!isMissingPath(error)) {
-        throw error;
+
+      const inspectSvg = source.path.toLowerCase().endsWith('.svg');
+      if (inspectSvg && source.sizeBytes > maxSvgAssetBytes) {
+        throw new Error(`SVG 文件超过安全检查限制 ${maxSvgAssetBytes} 字节：${source.path}`);
       }
+
+      const sourceFile = await openExportAssetSource(source);
+      let temporary: string;
+      try {
+        temporary = await writeTemporaryExportFile(target, async (path) => {
+          await pipeline(
+            sourceFile.createReadStream({ autoClose: false }),
+            createExportAssetInspector(source, inspectSvg),
+            createWriteStream(path, { flags: 'wx' }),
+          );
+          const copiedMetadata = await stat(path);
+          if (!copiedMetadata.isFile() || copiedMetadata.size !== source.sizeBytes) {
+            throw new Error(`题库资源文件在复制期间发生变化：${source.path}`);
+          }
+        });
+        stagedFiles.push({ target, temporary });
+      } finally {
+        await sourceFile.close();
+      }
+      assets.push(await describeExportAsset(source.path, temporary));
     }
 
-    if (source.path.toLowerCase().endsWith('.svg') && source.sizeBytes > maxSvgAssetBytes) {
-      throw new Error(`SVG 文件超过安全检查限制 ${maxSvgAssetBytes} 字节：${source.path}`);
+    for (const stagedFile of stagedFiles) {
+      await rename(stagedFile.temporary, stagedFile.target);
     }
-    const sourceFile = await openExportAssetSource(source);
-    try {
-      await withTemporaryExportFile(target, async (temporary) => {
-        await pipeline(
-          sourceFile.createReadStream({ autoClose: false }),
-          createExportAssetInspector(source),
-          createWriteStream(temporary, { flags: 'wx' }),
-        );
-        const copiedMetadata = await stat(temporary);
-        if (!copiedMetadata.isFile() || copiedMetadata.size !== source.sizeBytes) {
-          throw new Error(`题库资源文件在复制期间发生变化：${source.path}`);
-        }
-      });
-    } finally {
-      await sourceFile.close();
-    }
-    assets.push(await describeExportAsset(source.path, target));
+    return assets;
+  } finally {
+    await Promise.all(stagedFiles.map(({ temporary }) => rm(temporary, { force: true })));
   }
-  return assets;
 }
 
-function createExportAssetInspector(source: ExportAssetSource): Transform {
-  const inspectSvg = source.path.toLowerCase().endsWith('.svg');
+function createExportAssetInspector(source: ExportAssetSource, inspectSvg: boolean): Transform {
   const svgChunks: Buffer[] = [];
   let totalBytes = 0;
   return new Transform({
@@ -550,12 +562,25 @@ async function withTemporaryExportFile(
   target: string,
   writeTemporary: (temporary: string) => Promise<void>,
 ): Promise<void> {
-  const temporary = join(dirname(target), `.oqb-export-${randomUUID()}.tmp`);
+  const temporary = await writeTemporaryExportFile(target, writeTemporary);
   try {
-    await writeTemporary(temporary);
     await rename(temporary, target);
   } finally {
     await rm(temporary, { force: true });
+  }
+}
+
+async function writeTemporaryExportFile(
+  target: string,
+  writeTemporary: (temporary: string) => Promise<void>,
+): Promise<string> {
+  const temporary = join(dirname(target), `.oqb-export-${randomUUID()}.tmp`);
+  try {
+    await writeTemporary(temporary);
+    return temporary;
+  } catch (error) {
+    await rm(temporary, { force: true });
+    throw error;
   }
 }
 
