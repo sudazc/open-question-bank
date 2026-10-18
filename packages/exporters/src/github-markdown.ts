@@ -590,11 +590,16 @@ function rewriteMarkdown(
       (left, right) => right.length - left.length,
     );
     for (const variant of variants) {
-      const pattern = new RegExp(
-        `(^|[^A-Za-z0-9_./-])(${escapeRegExp(variant)})(?=$|[?#)\\s>])`,
+      const inlineLinkPattern = new RegExp(
+        `(\\]\\s*\\(\\s*<?)(${escapeRegExp(variant)})(?=$|[?#)\\s>])`,
         'gm',
       );
-      contents = replaceMarkdownMatches(contents, pattern, () => destination, 1);
+      contents = replaceMarkdownMatches(contents, inlineLinkPattern, () => destination, 1);
+      const referenceDefinitionPattern = new RegExp(
+        `^((?:[ \\t]{0,3}>[ \\t]?)*[ \\t]*\\[[^\\]\\n]+\\]:[ \\t]*<?)(${escapeRegExp(variant)})(?=$|[?#)\\s>])`,
+        'gm',
+      );
+      contents = replaceMarkdownMatches(contents, referenceDefinitionPattern, () => destination, 1);
     }
   }
 

@@ -306,6 +306,7 @@ describe('OpenQuestionBank GitHub Markdown 导出器', () => {
           body: [
             '正文引用 [关联题目](oqb://question/question-single-choice)。',
             '![三角形](assets/triangle.svg?view=raw#preview)',
+            '[外部资料](https://example.com/?source=assets/triangle.svg)',
             '\\`[转义边界](oqb://question/question-single-choice)\\`',
             '`oqb://question/question-single-choice`',
             '```text\noqb://knowledge/knowledge-foundations\n```',
@@ -325,6 +326,9 @@ describe('OpenQuestionBank GitHub Markdown 导出器', () => {
 
     expect(knowledgeContents).toContain('[关联题目](../questions/id-question-single-choice.md)');
     expect(knowledgeContents).toContain('![三角形](../assets/triangle.svg?view=raw#preview)');
+    expect(knowledgeContents).toContain(
+      '[外部资料](https://example.com/?source=assets/triangle.svg)',
+    );
     expect(knowledgeContents).toContain(
       '\\`[转义边界](../questions/id-question-single-choice.md)\\`',
     );
