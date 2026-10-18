@@ -280,8 +280,20 @@ async function discoverFiles(
   scanBudget: DirectoryScanBudget,
 ): Promise<DiscoveredFile[]> {
   const files: DiscoveredFile[] = [];
+  const portablePaths = new Map<string, string>();
   const expectedExtensions = supportedExtensions[collection];
   let limitReached = false;
+
+  function registerPortablePath(relativePath: string): boolean {
+    const key = getPortableEntityPathKey(relativePath);
+    const existingPath = portablePaths.get(key);
+    if (existingPath !== undefined) {
+      diagnostics.push(createEntityPathCollisionDiagnostic(existingPath, relativePath));
+      return false;
+    }
+    portablePaths.set(key, relativePath);
+    return true;
+  }
 
   async function visit(currentPath: string, depth: number): Promise<void> {
     if (limitReached) {
@@ -373,6 +385,9 @@ async function discoverFiles(
           diagnostics.push(createInvalidEntityPathDiagnostic(relativePath));
           continue;
         }
+        if (!registerPortablePath(relativePath)) {
+          continue;
+        }
         await visit(fullPath, depth + 1);
         continue;
       }
@@ -385,6 +400,9 @@ async function discoverFiles(
       }
       if (!isPortableBankPathSegment(entry.name)) {
         diagnostics.push(createInvalidEntityPathDiagnostic(relativePath));
+        continue;
+      }
+      if (!registerPortablePath(relativePath)) {
         continue;
       }
       if (files.length >= remainingFiles) {
@@ -476,6 +494,16 @@ function createInvalidEntityPathDiagnostic(path: string): Diagnostic {
     file: path,
     suggestion:
       '重命名路径段；每段不得包含 Windows 非法字符或控制字符，不能以点或空格结尾、不能使用保留设备名，UTF-8 长度不能超过 255 字节',
+  };
+}
+
+function createEntityPathCollisionDiagnostic(existingPath: string, path: string): Diagnostic {
+  return {
+    code: 'OQB-FILE-023',
+    severity: 'error',
+    message: `实体路径在大小写或 Unicode 规范化不敏感的文件系统上冲突：${existingPath}、${path}`,
+    file: path,
+    suggestion: '重命名其中一个文件或目录，使每个实体路径在大小写折叠和 Unicode NFC 归一化后唯一',
   };
 }
 
@@ -763,6 +791,10 @@ function isPortableBankPathSegment(segment: string): boolean {
 
   const baseName = segment.split('.')[0]?.replace(/[ .]+$/u, '') ?? '';
   return !/^(?:con|prn|aux|nul|conin\$|conout\$|com[1-9¹²³]|lpt[1-9¹²³])$/iu.test(baseName);
+}
+
+function getPortableEntityPathKey(path: string): string {
+  return path.normalize('NFC').toLowerCase().toUpperCase().toLowerCase();
 }
 
 async function findSymbolicLinkPath(

@@ -216,6 +216,66 @@ describe('OpenQuestionBank Core', () => {
     expect(result.diagnostics.some(({ code }) => code === 'OQB-FILE-022')).toBe(false);
   });
 
+  it.skipIf(platform() !== 'linux')('拒绝大小写折叠后重名的实体文件', async () => {
+    await writeFile(
+      join(rootDir, 'questions', 'Question.yaml'),
+      questionYaml('q-upper-path', 'k-one'),
+    );
+    await writeFile(
+      join(rootDir, 'questions', 'question.yaml'),
+      questionYaml('q-lower-path', 'k-one'),
+    );
+
+    const result = await validateQuestionBankDirectory(rootDir);
+
+    expect(result.valid).toBe(false);
+    expect(result.diagnostics.some(({ code }) => code === 'OQB-FILE-023')).toBe(true);
+    expect(
+      result.data.questions.filter(({ id }) => ['q-upper-path', 'q-lower-path'].includes(id)),
+    ).toHaveLength(1);
+  });
+
+  it.skipIf(platform() !== 'linux')('拒绝 Unicode NFC 归一化后重名的实体文件', async () => {
+    await writeFile(join(rootDir, 'questions', 'café.yaml'), questionYaml('q-nfc-path', 'k-one'));
+    await writeFile(
+      join(rootDir, 'questions', 'cafe\u0301.yaml'),
+      questionYaml('q-nfd-path', 'k-one'),
+    );
+
+    const result = await validateQuestionBankDirectory(rootDir);
+
+    expect(result.valid).toBe(false);
+    expect(result.diagnostics.some(({ code }) => code === 'OQB-FILE-023')).toBe(true);
+    expect(
+      result.data.questions.filter(({ id }) => ['q-nfc-path', 'q-nfd-path'].includes(id)),
+    ).toHaveLength(1);
+  });
+
+  it.skipIf(platform() !== 'linux')('拒绝大小写折叠后重名的实体子目录', async () => {
+    const upperDirectory = join(rootDir, 'questions', 'Math');
+    const lowerDirectory = join(rootDir, 'questions', 'math');
+    await mkdir(upperDirectory, { recursive: true });
+    await mkdir(lowerDirectory, { recursive: true });
+    await writeFile(
+      join(upperDirectory, 'question.yaml'),
+      questionYaml('q-upper-directory', 'k-one'),
+    );
+    await writeFile(
+      join(lowerDirectory, 'question.yaml'),
+      questionYaml('q-lower-directory', 'k-one'),
+    );
+
+    const result = await validateQuestionBankDirectory(rootDir);
+
+    expect(result.valid).toBe(false);
+    expect(result.diagnostics.some(({ code }) => code === 'OQB-FILE-023')).toBe(true);
+    expect(
+      result.data.questions.filter(({ id }) =>
+        ['q-upper-directory', 'q-lower-directory'].includes(id),
+      ),
+    ).toHaveLength(1);
+  });
+
   it.each([
     ['实体', 'questions', 0],
     ['资源', 'assets', 2],

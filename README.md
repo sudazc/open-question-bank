@@ -126,7 +126,7 @@ my-question-bank/
 └── README.md                 # 题库自己的使用说明
 ```
 
-每个 YAML 文件保存一个实体。Knowledge 使用 Markdown 正文和 YAML Front Matter；目录由 `bank.yaml` 的 `paths` 配置。`paths` 使用正斜杠相对路径，目录段、被递归扫描的实体子目录名，以及 `.yaml`、`.yml` 和 `.md` 实体文件名都要兼容 Windows、macOS 和 Linux：不能含 Windows 非法字符或控制字符，不能以点或空格结尾，不能使用 `CON`、`NUL` 等设备名，每段 UTF-8 长度不能超过 255 字节。无关扩展名文件不会因文件名不符合这套规则而阻断校验。实体之间通过稳定 ID 关联，文件名可以按维护习惯调整，但必须满足跨平台规则。
+每个 YAML 文件保存一个实体。Knowledge 使用 Markdown 正文和 YAML Front Matter；目录由 `bank.yaml` 的 `paths` 配置。`paths` 使用正斜杠相对路径，目录段、被递归扫描的实体子目录名，以及 `.yaml`、`.yml` 和 `.md` 实体文件名都要兼容 Windows、macOS 和 Linux：不能含 Windows 非法字符或控制字符，不能以点或空格结尾，不能使用 `CON`、`NUL` 等设备名，每段 UTF-8 长度不能超过 255 字节。无关扩展名文件不会因文件名不符合这套规则而阻断校验。同一类实体的递归扫描范围内，路径按大小写折叠和 Unicode NFC 归一化后也不能重名，否则 Core 会报告 `OQB-FILE-023`。实体之间通过稳定 ID 关联，文件名可以按维护习惯调整，但必须满足跨平台规则。
 
 ### 添加一道题
 
