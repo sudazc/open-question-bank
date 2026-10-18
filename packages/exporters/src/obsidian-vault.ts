@@ -98,6 +98,7 @@ export function createQuestionBankObsidianVaultExport(
     path.endsWith('.md'),
   );
   const entityTargets = createEntityPageTargets(data);
+  const questionNavigationById = createQuestionNavigationMap(entityTargets);
   const targetBySourcePath = new Map(
     entityTargets.map((target) => [target.sourcePath, target] as const),
   );
@@ -112,7 +113,7 @@ export function createQuestionBankObsidianVaultExport(
         path === 'README.md'
           ? contents.replace(githubIntroduction, obsidianIntroduction)
           : target
-            ? prepareObsidianEntityPage(contents, target, entityTargets)
+            ? prepareObsidianEntityPage(contents, target, questionNavigationById)
             : path.endsWith('/README.md')
               ? contents.replace(/ · `[^`]+`$/gm, '')
               : contents;
@@ -427,10 +428,24 @@ function createMarkdownOutputPathMap(
   return outputPaths;
 }
 
+function createQuestionNavigationMap(
+  entityTargets: readonly EntityPageTarget[],
+): Map<string, string> {
+  const questions = entityTargets
+    .filter(({ kind }) => kind === 'question')
+    .sort((left, right) => compareStrings(left.id, right.id));
+  return new Map(
+    questions.map((question, index) => [
+      question.id,
+      renderQuestionNavigation(questions[index - 1], questions[index + 1]),
+    ]),
+  );
+}
+
 function prepareObsidianEntityPage(
   markdown: string,
   target: EntityPageTarget,
-  entityTargets: readonly EntityPageTarget[],
+  questionNavigationById: ReadonlyMap<string, string>,
 ): string {
   let result = markdown.replace(/^# .+$/m, '# ' + escapeMarkdownHeading(target.title));
   const codeTick = String.fromCharCode(96);
@@ -466,11 +481,10 @@ function prepareObsidianEntityPage(
   result = neutralizeChoiceMarkers(result);
   result = collapseQuestionAnswer(result, target.id);
 
-  const questions = entityTargets
-    .filter(({ kind }) => kind === 'question')
-    .sort((left, right) => compareStrings(left.id, right.id));
-  const index = questions.findIndex(({ id }) => id === target.id);
-  const navigation = renderQuestionNavigation(questions[index - 1], questions[index + 1]);
+  const navigation = questionNavigationById.get(target.id);
+  if (navigation === undefined) {
+    throw new Error(`无法生成题目 ${target.id} 的导航，已取消 Obsidian 导出`);
+  }
   result = result.replace(/^(# .+)$/m, '$1\n\n' + navigation);
   return addObsidianProperties(result, target);
 }

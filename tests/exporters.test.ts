@@ -784,6 +784,38 @@ describe('OpenQuestionBank Obsidian Vault 导出器', () => {
     expect(reordered.files).toEqual(createQuestionBankObsidianVaultExport(data, assets).files);
   });
 
+  it('按稳定 ID 排列题目导航并标明首尾边界', () => {
+    const exported = createQuestionBankObsidianVaultExport(data, assets);
+    const pages = exported.files.filter(
+      ({ path }) => path.startsWith('题目/') && path !== '题目/索引.md',
+    );
+    const pageById = new Map(
+      pages.map((page) => {
+        const id = /^题库ID: "([^"]+)"$/m.exec(page.contents)?.[1];
+        if (id === undefined) {
+          throw new Error(`题目页面缺少稳定 ID：${page.path}`);
+        }
+        return [id, page] as const;
+      }),
+    );
+    const questionIds = data.questions.map(({ id }) => id).sort();
+
+    questionIds.forEach((questionId, index) => {
+      const page = pageById.get(questionId);
+      const previous = index > 0 ? pageById.get(questionIds[index - 1] ?? '') : undefined;
+      const next = pageById.get(questionIds[index + 1] ?? '');
+      const navigation = page?.contents.split('\n').find((line) => line.includes('**上一题：**'));
+
+      expect(navigation).toBeDefined();
+      expect(navigation).toContain(
+        previous ? `**上一题：** [[${previous.path.replace(/\.md$/, '')}|` : '**上一题：** 无',
+      );
+      expect(navigation).toContain(
+        next ? `**下一题：** [[${next.path.replace(/\.md$/, '')}|` : '**下一题：** 无',
+      );
+    });
+  });
+
   it('拒绝悬空或类型错误的正文引用', () => {
     const broken: QuestionBankData = {
       ...data,
