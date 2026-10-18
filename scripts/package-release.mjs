@@ -16,8 +16,14 @@ import { fileURLToPath } from 'node:url';
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const rootPackage = JSON.parse(readFileSync(path.join(rootDir, 'package.json'), 'utf8'));
-const versionPattern =
-  /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
+const numericIdentifier = '(?:0|[1-9]\\d*)';
+const nonNumericIdentifier = '[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*';
+const prereleaseIdentifier = `(?:${numericIdentifier}|${nonNumericIdentifier})`;
+const versionPattern = new RegExp(
+  `^(?:0|[1-9]\\d*)\\.(?:0|[1-9]\\d*)\\.(?:0|[1-9]\\d*)` +
+    `(?:-${prereleaseIdentifier}(?:\\.${prereleaseIdentifier})*)?` +
+    `(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$`,
+);
 
 if (!versionPattern.test(rootPackage.version)) {
   throw new Error(`根目录 package.json 不是有效的 SemVer 版本：${rootPackage.version}`);
