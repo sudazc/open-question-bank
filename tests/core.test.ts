@@ -1312,6 +1312,20 @@ describe('OpenQuestionBank Core', () => {
     expect(() => parseYamlDocument('loop: &loop\n  self: *loop')).toThrow('循环别名');
   });
 
+  it('允许恰好 128 层 YAML 结构并拒绝第 129 层', () => {
+    const nestedYaml = (depth: number): string => {
+      const source: string[] = [];
+      for (let index = 0; index < depth; index += 1) {
+        source.push(`${'  '.repeat(index)}level-${index}:`);
+      }
+      source.push(`${'  '.repeat(depth)}leaf: value`);
+      return source.join('\n');
+    };
+
+    expect(() => parseYamlDocument(nestedYaml(128))).not.toThrow();
+    expect(() => parseYamlDocument(nestedYaml(129))).toThrow('嵌套超过 128 层');
+  });
+
   it('拒绝通过已解析别名绕过 YAML 嵌套深度限制', () => {
     const source = ['base: &base', '  marker: value', 'deep:'];
     for (let index = 0; index < 130; index += 1) {
