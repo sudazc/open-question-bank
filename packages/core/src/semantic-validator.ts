@@ -623,6 +623,28 @@ function validateMarkdownReferences(
   diagnostics: Diagnostic[],
 ): void {
   const targets = { topic: topics, knowledge, question: questions, exam: exams };
+  if (bank.bank?.value.description !== undefined) {
+    checkMarkdownValue(
+      bank.bank.file,
+      bank.bank.value.id,
+      'description',
+      bank.bank.value.description,
+      targets,
+      diagnostics,
+    );
+  }
+  for (const topic of bank.topics) {
+    if (topic.value.description !== undefined) {
+      checkMarkdownValue(
+        topic.file,
+        topic.value.id,
+        'description',
+        topic.value.description,
+        targets,
+        diagnostics,
+      );
+    }
+  }
   for (const note of bank.knowledge) {
     checkMarkdownValue(note.file, note.value.id, 'body', note.value.body, targets, diagnostics);
   }

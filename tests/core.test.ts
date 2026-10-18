@@ -508,6 +508,43 @@ describe('OpenQuestionBank Core', () => {
     expect(result.diagnostics.filter(({ code }) => code === 'OQB-REF-003')).toHaveLength(2);
   });
 
+  it('检查题库简介和考点说明中的 Markdown 内部引用', async () => {
+    const bankPath = join(rootDir, 'bank.yaml');
+    const bank = await readFile(bankPath, 'utf8');
+    await writeFile(
+      bankPath,
+      bank.replace(
+        'name: 通用示例题库',
+        'name: 通用示例题库\ndescription: "[知识](oqb://knowledge/missing)"',
+      ),
+    );
+
+    const topicPath = join(rootDir, 'topics/root.yaml');
+    const topic = await readFile(topicPath, 'utf8');
+    await writeFile(
+      topicPath,
+      topic.replace('name: 根考点', 'name: 根考点\ndescription: "[题目](oqb://question/missing)"'),
+    );
+
+    const result = await validateQuestionBankDirectory(rootDir);
+
+    expect(result.valid).toBe(false);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'OQB-REF-003',
+        entityId: 'sample-bank',
+        fieldPath: 'description',
+      }),
+    );
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'OQB-REF-003',
+        entityId: 'topic-root',
+        fieldPath: 'description',
+      }),
+    );
+  });
+
   it('拒绝 Markdown 中的平台特定 URI 协议并允许标准链接', async () => {
     const notePath = join(rootDir, 'knowledge/one.md');
     const note = await readFile(notePath, 'utf8');
