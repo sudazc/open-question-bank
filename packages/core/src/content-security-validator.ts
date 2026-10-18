@@ -27,7 +27,10 @@ export function validateContentSecurity(
     const searchable = maskMarkdownCode(field.value)
       .replace(/(\]\s*\(\s*)<([^>\n]+)>/g, '$1 ')
       .replace(/^((?:[ \t]{0,3}>[ \t]?)*[ \t]*\[[^\]\n]+\]:[ \t]*)<([^>\n]+)>/gm, '$1 ')
-      .replace(/<(?:https?:\/\/[^>\s]+|mailto:[^>\s]+|[^<>\s@]+@[^<>\s@]+)>/gi, ' ');
+      .replace(
+        /<(?:https?:\/\/[^>\s]+|mailto:[^>\s]+|tel:[^>\s]+|oqb:\/\/[^>\s]+|[^<>\s@]+@[^<>\s@]+)>/gi,
+        ' ',
+      );
     const tags = [...searchable.matchAll(htmlTagPattern)].map((match) => match[0]);
     const unsafeTags = tags.filter((tag) => !isSafeHtmlTag(tag));
     if (

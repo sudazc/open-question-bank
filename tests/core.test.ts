@@ -346,6 +346,8 @@ describe('OpenQuestionBank Core', () => {
           '[网页](https://example.com)',
           '[邮箱](mailto:reader@example.com)',
           '[电话](tel:+1234567890)',
+          '<tel:+1234567890>',
+          '<oqb://knowledge/k-two>',
         ].join('\n'),
       ),
     );
