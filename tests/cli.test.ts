@@ -64,6 +64,18 @@ describe('OpenQuestionBank CLI', () => {
     expect(stdout.join('\n')).toContain('已在');
   });
 
+  it('初始化提示不把特殊目录名拼入可复制命令', async () => {
+    const bankDir = join(rootDir, 'bank$(echo unsafe)');
+
+    const exitCode = await runCli(['init', bankDir], output);
+
+    expect(exitCode).toBe(0);
+    expect(stdout[1]).toBe(
+      '下一步：编辑 bank.yaml 和示例内容，然后进入题库目录运行 `oqb validate .`',
+    );
+    expect(stdout[1]).not.toContain(bankDir);
+  });
+
   it('拒绝向非空目录初始化并保留已有文件', async () => {
     const bankDir = join(rootDir, 'existing-bank');
     const existingFile = join(bankDir, 'keep.txt');

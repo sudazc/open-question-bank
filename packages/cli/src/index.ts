@@ -222,9 +222,7 @@ async function initializeQuestionBank(directory: string, output: CliOutput): Pro
   }
 
   output.stdout(`已在 ${target} 初始化题库`);
-  output.stdout(
-    '下一步：编辑 bank.yaml 和示例内容，然后运行 `oqb validate ' + quotePath(target) + '`',
-  );
+  output.stdout('下一步：编辑 bank.yaml 和示例内容，然后进入题库目录运行 `oqb validate .`');
   if (targetExists) {
     output.stdout('原目录为空，已保留目录本身并写入模板文件');
   }
@@ -468,10 +466,6 @@ function isMissingPath(error: unknown): boolean {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
-}
-
-function quotePath(path: string): string {
-  return path.includes(' ') ? `"${path}"` : path;
 }
 
 function printHelp(output: CliOutput): void {
