@@ -714,6 +714,31 @@ describe('Core 资源校验', () => {
     );
   });
 
+  it('release 模式忽略未发布实体引用的危险 SVG', async () => {
+    await writeFile(join(rootDir, 'assets/unsafe.svg'), '<svg><script>alert(1)</script></svg>');
+    await writeFile(
+      join(rootDir, 'knowledge/a-draft.md'),
+      knowledgeMarkdown(['assets/unsafe.svg'], '![资源](assets/unsafe.svg)').replace(
+        'id: knowledge-asset',
+        'id: k-draft',
+      ),
+    );
+    await writeFile(
+      join(rootDir, 'knowledge/z-approved.md'),
+      knowledgeMarkdown([], '已审核知识正文。')
+        .replace('id: knowledge-asset', 'id: k-approved')
+        .replace('review: { status: draft }', 'review: { status: approved }'),
+    );
+
+    const result = await validateQuestionBankDirectory(rootDir, { mode: 'release' });
+
+    expect(result.valid).toBe(true);
+    expect(result.data.knowledge.map(({ id }) => id)).toEqual(['k-approved']);
+    expect(result.diagnostics).not.toContainEqual(
+      expect.objectContaining({ code: 'OQB-SECURITY-003', entityId: 'k-draft' }),
+    );
+  });
+
   it('忽略外部链接和代码片段中的示例链接', async () => {
     await writeFile(
       join(rootDir, 'knowledge/note.md'),
