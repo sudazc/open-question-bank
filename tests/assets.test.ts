@@ -75,6 +75,21 @@ describe('Core 资源校验', () => {
     expect(result.diagnostics.filter(({ code }) => code !== 'OQB-QUALITY-006')).toEqual([]);
   });
 
+  it('校验省略分号的 HTML 字符引用资源链接', async () => {
+    const assetPath = 'assets/diagram&/guide.svg';
+    await mkdir(join(rootDir, 'assets/diagram&'), { recursive: true });
+    await writeFile(join(rootDir, assetPath), '<svg/>');
+    await writeFile(
+      join(rootDir, 'knowledge/note.md'),
+      knowledgeMarkdown([assetPath], '![图片](<assets/diagram&amp/guide.svg>)'),
+    );
+
+    const result = await validateQuestionBankDirectory(rootDir);
+
+    expect(result.valid, JSON.stringify(result.diagnostics, null, 2)).toBe(true);
+    expect(result.diagnostics.filter(({ code }) => code.startsWith('OQB-ASSET-'))).toEqual([]);
+  });
+
   it('检查简答题参考答案中的资源链接与 assets 清单', async () => {
     const assetPath = 'assets/answer-image.png';
     await writeFile(join(rootDir, assetPath), 'image');

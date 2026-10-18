@@ -686,7 +686,7 @@ function decodeMarkdownEscapesInSearchView(view: MarkdownSearchView): MarkdownSe
 function decodeHtmlEntitiesInSearchView(view: MarkdownSearchView): MarkdownSearchView {
   const result = createEmptySearchView();
   for (let index = 0; index < view.text.length; index += 1) {
-    const entity = /^&(?:#[xX][0-9a-fA-F]+;?|#\d+;?|[A-Za-z][A-Za-z0-9]+;)/.exec(
+    const entity = /^&(?:#[xX][0-9a-fA-F]+;?|#\d+;?|[A-Za-z][A-Za-z0-9]*;?)/.exec(
       view.text.slice(index),
     )?.[0];
     if (entity) {

@@ -371,14 +371,16 @@ describe('OpenQuestionBank GitHub Markdown 导出器', () => {
     const assetPath = 'assets/diagram&guide.svg';
     const encodedAssetPath = 'assets/diagram+guide.svg';
     const escapedAssetPath = 'assets/diagram,guide.svg';
+    const legacyEntityAssetPath = 'assets/diagram&/guide.svg';
     const linkedData: QuestionBankData = {
       ...data,
       knowledge: [
         {
           ...knowledge,
-          assets: [assetPath, encodedAssetPath, escapedAssetPath],
+          assets: [assetPath, encodedAssetPath, escapedAssetPath, legacyEntityAssetPath],
           body: [
             '![图](<assets/diagram&amp;guide.svg?view=raw#preview>)',
+            '![无分号 HTML 字符引用](<assets/diagram&amp/guide.svg>)',
             '[diagram]: <&#97;ssets&sol;diagram&#38;guide&period;svg>',
             '[图][diagram]',
             '![百分号编码](assets/diagram%2bguide.svg)',
@@ -388,11 +390,13 @@ describe('OpenQuestionBank GitHub Markdown 导出器', () => {
       ],
     };
     const imageBytes = new TextEncoder().encode('<svg/>');
-    const imageAssets = [assetPath, encodedAssetPath, escapedAssetPath].map((path) => ({
-      path,
-      sizeBytes: imageBytes.byteLength,
-      sha256: createHash('sha256').update(imageBytes).digest('hex'),
-    }));
+    const imageAssets = [assetPath, encodedAssetPath, escapedAssetPath, legacyEntityAssetPath].map(
+      (path) => ({
+        path,
+        sizeBytes: imageBytes.byteLength,
+        sha256: createHash('sha256').update(imageBytes).digest('hex'),
+      }),
+    );
     const githubExport = createQuestionBankGithubMarkdownExport(linkedData, imageAssets);
     const githubKnowledge = githubExport.files.find(
       ({ path }) => path === 'knowledge/id-knowledge-foundations.md',
@@ -407,14 +411,17 @@ describe('OpenQuestionBank GitHub Markdown 导出器', () => {
     )?.contents;
 
     expect(githubKnowledge).toContain('![图](<../assets/diagram%26guide.svg?view=raw#preview>)');
+    expect(githubKnowledge).toContain('![无分号 HTML 字符引用](<../assets/diagram%26/guide.svg>)');
     expect(githubKnowledge).toContain('[diagram]: <../assets/diagram%26guide.svg>');
     expect(githubKnowledge).toContain('![百分号编码](../assets/diagram%2Bguide.svg)');
     expect(githubKnowledge).toContain('![Markdown 转义](../assets/diagram%2Cguide.svg)');
     expect(obsidianKnowledge).toContain('![[assets/diagram&guide.svg#preview]]');
+    expect(obsidianKnowledge).toContain('![[assets/diagram&/guide.svg]]');
     expect(obsidianKnowledge).toContain('[diagram]: <../assets/diagram%26guide.svg>');
     expect(obsidianKnowledge).toContain('![[assets/diagram+guide.svg]]');
     expect(obsidianKnowledge).toContain('![[assets/diagram,guide.svg]]');
     expect(notionKnowledge).toContain('![图](<../assets/diagram%26guide.svg?view=raw#preview>)');
+    expect(notionKnowledge).toContain('![无分号 HTML 字符引用](<../assets/diagram%26/guide.svg>)');
   });
 
   it('对实体输入顺序变化保持相同输出', () => {
