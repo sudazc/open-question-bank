@@ -814,6 +814,23 @@ describe('OpenQuestionBank Notion 导入包导出器', () => {
     expect(questionPage).not.toContain('难度：中 · 分值：高');
   });
 
+  it('将题目元数据中的独立回车规范化为空格', () => {
+    const notionData: QuestionBankData = {
+      ...data,
+      questions: data.questions.map((question) =>
+        question.id === 'question-single-choice'
+          ? { ...question, difficulty: '中\r偏高' }
+          : question,
+      ),
+    };
+    const questionPage = createQuestionBankNotionExport(notionData, assets).files.find(
+      ({ path }) => path === 'questions/id-question-single-choice.md',
+    )?.contents;
+
+    expect(questionPage).toContain('单选题 · 难度：中 偏高 · 分值：1 分');
+    expect(questionPage).not.toContain('\r');
+  });
+
   it('生成题目与答案分离的数据库、练习页面、关系映射和发布清单', () => {
     const exported = createQuestionBankNotionExport(data, assets);
     const topicsCsv = exported.files.find(({ path }) => path === 'databases/topics.csv')?.contents;

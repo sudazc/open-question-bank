@@ -18,7 +18,7 @@ export function escapeMarkdownText(value: string): string {
     .replaceAll('|', '\\|')
     .replaceAll('>', '\\>')
     .replace(/</g, '&lt;')
-    .replace(/\r?\n/g, ' ');
+    .replace(/[\r\n]+/g, ' ');
 }
 
 /** 将文本压缩并转义为单行 Markdown 标题 */
