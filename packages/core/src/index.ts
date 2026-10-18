@@ -13,6 +13,7 @@ export {
 export { buildEntityIndex, type EntityIndex } from './entity-index.js';
 export { hasCredentialedQuestionBankUrls } from './content-security-validator.js';
 export { decodeHtmlCharacterReferences } from './html-entities.js';
+export { getSvgSecurityIssue, maxSvgAssetBytes } from './asset-validator.js';
 export {
   defaultMaxTotalAssetBytes,
   loadQuestionBank,

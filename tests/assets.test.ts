@@ -166,6 +166,32 @@ describe('Core 资源校验', () => {
     );
   });
 
+  it('复制 SVG 时重新检查内容，拒绝校验后同大小替换的活动内容', async () => {
+    const assetPath = 'assets/image.svg';
+    const sourcePath = join(rootDir, assetPath);
+    const outputDir = join(rootDir, 'svg-export');
+    const safeSvg = `<svg>${' '.repeat(11)}</svg>`;
+    const unsafeSvg = '<svg onload="x"></svg>';
+    const data: QuestionBankData = {
+      bank,
+      topics: [],
+      knowledge: [{ ...knowledge, body: '![图片](assets/image.svg)', assets: [assetPath] }],
+      questions: [],
+      groups: [],
+      exams: [],
+    };
+    expect(Buffer.byteLength(safeSvg)).toBe(Buffer.byteLength(unsafeSvg));
+    await writeFile(sourcePath, safeSvg);
+    const sources = await collectExportAssetSources(rootDir, data, bank);
+    await mkdir(outputDir);
+    await copyExportAssets(sources, outputDir);
+    expect(await readFile(join(outputDir, assetPath), 'utf8')).toBe(safeSvg);
+    await writeFile(sourcePath, unsafeSvg);
+
+    await expect(copyExportAssets(sources, outputDir)).rejects.toThrow('事件处理属性');
+    expect(await readFile(join(outputDir, assetPath), 'utf8')).toBe(safeSvg);
+  });
+
   it('解码 HTML 字符引用后校验资源文件名', async () => {
     const assetPath = 'assets/diagram&guide.svg';
     await writeFile(

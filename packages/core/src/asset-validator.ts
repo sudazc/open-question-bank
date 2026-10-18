@@ -4,6 +4,8 @@ import { TextDecoder } from 'node:util';
 import type { Diagnostic, DiagnosticSeverity } from './diagnostics.js';
 import { decodeHtmlCharacterReferences } from './html-entities.js';
 
+export const maxSvgAssetBytes = 2_097_152;
+
 interface AssetEntity {
   file: string;
   value: unknown;
@@ -676,8 +678,8 @@ async function inspectSvgContent(
     if (metadata.isSymbolicLink() || !metadata.isFile()) {
       return undefined;
     }
-    if (metadata.size > 2_097_152) {
-      return `SVG 文件大小 ${metadata.size} 字节，超过安全检查限制 2097152 字节：${relativePath}`;
+    if (metadata.size > maxSvgAssetBytes) {
+      return `SVG 文件大小 ${metadata.size} 字节，超过安全检查限制 ${maxSvgAssetBytes} 字节：${relativePath}`;
     }
     file = await open(fullPath, 'r');
     const openedMetadata = await file.stat();
@@ -691,13 +693,13 @@ async function inspectSvgContent(
     if (!isContained(canonicalRoot, canonicalPath)) {
       return undefined;
     }
-    const bytes = Buffer.alloc(2_097_153);
+    const bytes = Buffer.alloc(maxSvgAssetBytes + 1);
     const { bytesRead } = await file.read(bytes, 0, bytes.length, 0);
-    if (bytesRead > 2_097_152) {
-      return `SVG 文件超过安全检查限制 2097152 字节：${relativePath}`;
+    if (bytesRead > maxSvgAssetBytes) {
+      return `SVG 文件超过安全检查限制 ${maxSvgAssetBytes} 字节：${relativePath}`;
     }
     const source = new TextDecoder('utf-8', { fatal: true }).decode(bytes.subarray(0, bytesRead));
-    return unsafeSvgContentIssue(source);
+    return getSvgSecurityIssue(source);
   } catch {
     return `SVG 文件无法读取或不是有效的 UTF-8 文本：${relativePath}`;
   } finally {
@@ -705,7 +707,8 @@ async function inspectSvgContent(
   }
 }
 
-function unsafeSvgContentIssue(source: string): string | undefined {
+/** 检查 SVG 文本是否包含活动内容或外部资源 */
+export function getSvgSecurityIssue(source: string): string | undefined {
   if (/<!\s*(?:doctype|entity)\b|<\?xml-stylesheet\b|\bxml:base\s*=/i.test(source)) {
     return 'SVG 包含不允许的文档类型、实体或外部样式声明';
   }

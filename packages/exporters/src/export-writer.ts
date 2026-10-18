@@ -13,9 +13,16 @@ import {
   writeFile,
 } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { Transform, type TransformCallback } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
+import { TextDecoder } from 'node:util';
 import type { Bank } from '@openquestionbank/schema';
-import { defaultMaxTotalAssetBytes, type QuestionBankData } from '@openquestionbank/core';
+import {
+  defaultMaxTotalAssetBytes,
+  getSvgSecurityIssue,
+  maxSvgAssetBytes,
+  type QuestionBankData,
+} from '@openquestionbank/core';
 import {
   assertSafeExportPath,
   assertUniquePortableExportPaths,
@@ -184,11 +191,15 @@ export async function copyExportAssets(
       }
     }
 
+    if (source.path.toLowerCase().endsWith('.svg') && source.sizeBytes > maxSvgAssetBytes) {
+      throw new Error(`SVG 文件超过安全检查限制 ${maxSvgAssetBytes} 字节：${source.path}`);
+    }
     const sourceFile = await openExportAssetSource(source);
     try {
       await withTemporaryExportFile(target, async (temporary) => {
         await pipeline(
           sourceFile.createReadStream({ autoClose: false }),
+          createExportAssetInspector(source),
           createWriteStream(temporary, { flags: 'wx' }),
         );
         const copiedMetadata = await stat(temporary);
@@ -202,6 +213,55 @@ export async function copyExportAssets(
     assets.push(await describeExportAsset(source.path, target));
   }
   return assets;
+}
+
+function createExportAssetInspector(source: ExportAssetSource): Transform {
+  const inspectSvg = source.path.toLowerCase().endsWith('.svg');
+  const svgChunks: Buffer[] = [];
+  let totalBytes = 0;
+  return new Transform({
+    transform(chunk: Buffer, _encoding: BufferEncoding, callback: TransformCallback) {
+      totalBytes += chunk.byteLength;
+      if (totalBytes > source.sizeBytes) {
+        callback(new Error(`题库资源文件在复制期间发生变化：${source.path}`));
+        return;
+      }
+      if (inspectSvg) {
+        if (totalBytes > maxSvgAssetBytes) {
+          callback(new Error(`SVG 文件超过安全检查限制 ${maxSvgAssetBytes} 字节：${source.path}`));
+          return;
+        }
+        svgChunks.push(chunk);
+      }
+      callback(null, chunk);
+    },
+    flush(callback: TransformCallback) {
+      if (totalBytes !== source.sizeBytes) {
+        callback(new Error(`题库资源文件在复制期间发生变化：${source.path}`));
+        return;
+      }
+      if (!inspectSvg) {
+        callback();
+        return;
+      }
+
+      let svgSource: string;
+      try {
+        svgSource = new TextDecoder('utf-8', { fatal: true }).decode(
+          Buffer.concat(svgChunks, totalBytes),
+        );
+      } catch {
+        callback(new Error(`SVG 文件不是有效的 UTF-8 文本：${source.path}`));
+        return;
+      }
+      const issue = getSvgSecurityIssue(svgSource);
+      if (issue) {
+        callback(new Error(`${issue}：${source.path}`));
+        return;
+      }
+      callback();
+    },
+  });
 }
 
 /** 打开仍位于题库资源目录中的普通文件 */
