@@ -163,7 +163,7 @@ function matchesNumericUnit(
 }
 
 function parseDecimal(value: string): DecimalValue | undefined {
-  if (value.length > 128 || !/^-?(?:0|[1-9]\d*)(?:\.\d+)?$/.test(value)) {
+  if (value.length > 128 || !/^-?(?:0|[1-9]\d*)(?:\.\d+)?(?![\s\S])/.test(value)) {
     return undefined;
   }
 
