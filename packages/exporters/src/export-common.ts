@@ -98,7 +98,7 @@ export function assertUniquePortableExportPaths(
   const seenPaths = new Map<string, string>();
   for (const path of paths) {
     assertSafeExportPath(path, label);
-    const key = path.normalize('NFC').toUpperCase().toLowerCase();
+    const key = getPortableExportPathKey(path);
     const existingPath = seenPaths.get(key);
     if (existingPath !== undefined) {
       if (existingPath === path) {
@@ -122,6 +122,11 @@ export function assertUniquePortableExportPaths(
       }
     }
   }
+}
+
+/** 生成跨平台导出路径比较键 */
+export function getPortableExportPathKey(path: string): string {
+  return path.normalize('NFC').toLowerCase().toUpperCase().toLowerCase();
 }
 
 function compareStrings(left: string, right: string): number {

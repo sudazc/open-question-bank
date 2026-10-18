@@ -7,6 +7,7 @@ import {
   createQuestionBankNotionExport,
   createQuestionBankObsidianVaultExport,
 } from '../packages/exporters/src/index.js';
+import { assertUniquePortableExportPaths } from '../packages/exporters/src/export-common.js';
 import { getQuestionAnswerSectionMarkers } from '../packages/exporters/src/github-markdown.js';
 import { bank, exams, knowledge, questions, questionGroup, topic } from './fixtures.js';
 
@@ -149,6 +150,12 @@ describe('各格式共用的导出安全检查', () => {
 });
 
 describe('跨平台导出文件名', () => {
+  it('拒绝扩展 Unicode 大小写折叠后冲突的路径', () => {
+    expect(() => assertUniquePortableExportPaths(['assets/ẞ.svg', 'assets/ß.svg'])).toThrow(
+      '大小写或 Unicode 规范化不敏感',
+    );
+  });
+
   it('拒绝 Windows 非法文件名、保留设备名和超长路径段', () => {
     for (const path of [
       'assets/CON.svg',

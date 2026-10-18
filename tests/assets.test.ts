@@ -10,6 +10,7 @@ import {
 import {
   collectExportAssetSources,
   prepareExportDirectory,
+  readPreviousExportFiles,
   removeStaleExportFiles,
 } from '../packages/exporters/src/export-writer.js';
 import { bank, knowledge } from './fixtures.js';
@@ -400,6 +401,33 @@ describe('Core 资源校验', () => {
     );
 
     expect(await readFile(join(outputDir, 'old.md'), 'utf8')).toBe(contents);
+  });
+
+  it('忽略旧清单中的路径穿越记录', async () => {
+    const outputDir = join(rootDir, 'malformed-manifest-output');
+    const outsideFile = join(rootDir, 'outside.txt');
+    const contents = '用户文件';
+    await mkdir(outputDir);
+    await writeFile(outsideFile, contents);
+    await writeFile(
+      join(outputDir, 'manifest.json'),
+      JSON.stringify({
+        format: 'openquestionbank-json',
+        files: [
+          {
+            path: '../outside.txt',
+            sizeBytes: Buffer.byteLength(contents, 'utf8'),
+            sha256: createHash('sha256').update(contents).digest('hex'),
+          },
+        ],
+      }),
+    );
+
+    const previousFiles = await readPreviousExportFiles(outputDir);
+    await removeStaleExportFiles(outputDir, previousFiles, []);
+
+    expect(previousFiles).toEqual([]);
+    expect(await readFile(outsideFile, 'utf8')).toBe(contents);
   });
 
   it('忽略外部链接和代码片段中的示例链接', async () => {

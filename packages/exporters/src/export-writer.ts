@@ -18,6 +18,7 @@ import {
   assertSafeExportPath,
   assertUniquePortableExportPaths,
   collectReferencedAssets,
+  getPortableExportPathKey,
   type ExportAsset,
 } from './export-common.js';
 
@@ -297,10 +298,10 @@ export async function removeStaleExportFiles(
   currentPaths: readonly string[],
 ): Promise<void> {
   const currentPathsByKey = new Map(
-    currentPaths.map((path) => [getPortablePathKey(path), path] as const),
+    currentPaths.map((path) => [getPortableExportPathKey(path), path] as const),
   );
   for (const previousFile of previousFiles) {
-    const currentPath = currentPathsByKey.get(getPortablePathKey(previousFile.path));
+    const currentPath = currentPathsByKey.get(getPortableExportPathKey(previousFile.path));
     if (currentPath === previousFile.path) {
       continue;
     }
@@ -450,10 +451,6 @@ function isPathWithin(parent: string, target: string): boolean {
       pathFromParent !== '..' &&
       !isAbsolute(pathFromParent))
   );
-}
-
-function getPortablePathKey(path: string): string {
-  return path.normalize('NFC').toUpperCase().toLowerCase();
 }
 
 function isMissingPath(error: unknown): boolean {
