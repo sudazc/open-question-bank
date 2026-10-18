@@ -18,7 +18,7 @@ import { maskMarkdownCode } from './markdown-utils.js';
 import type { ExportFile } from './export-writer.js';
 
 const format = 'openquestionbank-github-markdown';
-const formatVersion = '1.1.0';
+const formatVersion = '1.2.0';
 
 const sourceTypeLabels: Record<Question['source']['type'], string> = {
   original: '原创',

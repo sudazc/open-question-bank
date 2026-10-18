@@ -14,7 +14,7 @@ import {
 import type { ExportFile } from './export-writer.js';
 
 const format = 'openquestionbank-notion-import';
-const formatVersion = '2.1.0';
+const formatVersion = '2.2.0';
 const databasePaths = [
   'databases/bank.csv',
   'databases/topics.csv',

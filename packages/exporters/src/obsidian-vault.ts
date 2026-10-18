@@ -13,7 +13,7 @@ import {
 } from './github-markdown.js';
 
 const format = 'openquestionbank-obsidian-vault';
-const formatVersion = '2.0.0';
+const formatVersion = '2.1.0';
 const manifestPath = 'manifest.json';
 const githubIntroduction =
   '本目录由 OpenQuestionBank 生成，适合直接在 GitHub 中阅读。实体页面保留稳定 ID，题库内部链接和资源链接已转换为相对路径。';

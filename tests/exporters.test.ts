@@ -229,7 +229,7 @@ describe('OpenQuestionBank GitHub Markdown 导出器', () => {
     ).toContain('说明主要概念（1 分）');
     expect(exported.manifest).toMatchObject({
       format: 'openquestionbank-github-markdown',
-      formatVersion: '1.1.0',
+      formatVersion: '1.2.0',
       schemaVersion: '1.0.0',
       bank: { id: bank.id, name: bank.name, version: bank.version },
       statistics: {
@@ -494,7 +494,7 @@ describe('OpenQuestionBank Obsidian Vault 导出器', () => {
     expect(questionContents).toContain('**下一题：**');
     expect(exported.manifest).toMatchObject({
       format: 'openquestionbank-obsidian-vault',
-      formatVersion: '2.0.0',
+      formatVersion: '2.1.0',
       schemaVersion: '1.0.0',
       bank: { id: bank.id, name: bank.name, version: bank.version },
       statistics: {
@@ -680,7 +680,7 @@ describe('OpenQuestionBank Notion 导入包导出器', () => {
     );
     expect(exported.manifest).toMatchObject({
       format: 'openquestionbank-notion-import',
-      formatVersion: '2.1.0',
+      formatVersion: '2.2.0',
       schemaVersion: '1.0.0',
       bank: { id: bank.id, name: bank.name, version: bank.version },
       statistics: {

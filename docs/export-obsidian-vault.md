@@ -1,4 +1,4 @@
-# Obsidian Vault 导出 2.0
+# Obsidian Vault 导出 2.1
 
 `oqb export --format obsidian` 会先按选定模式校验题库，再生成可直接在 Obsidian 中打开的 Vault。源题库仍使用平台无关的 YAML 和 Markdown；导出的实体关系使用 Obsidian Wiki 链接。
 
@@ -80,7 +80,7 @@ Markdown 页面中的来源类型和审核状态使用中文标签展示，例�
 ```json
 {
   "format": "openquestionbank-obsidian-vault",
-  "formatVersion": "2.0.0",
+  "formatVersion": "2.1.0",
   "schemaVersion": "1.0.0",
   "bank": { "id": "my-question-bank", "name": "我的题库", "version": "1.0.0" },
   "statistics": {
@@ -104,4 +104,4 @@ Markdown 页面中的来源类型和审核状态使用中文标签展示，例�
 
 ## 版本兼容
 
-`formatVersion` 描述 Obsidian Vault 导出包约定，`schemaVersion` 描述题库实体约定。读取工具应检查 `format` 和 `formatVersion`。2.0.0 将实体页面路径从稳定 ID 改为可读标题，并调整题目答案的显示方式；读取工具应从页面属性读取稳定 ID，不能再从文件名推断 ID。后续改变必需页面、清单字段或字段含义时，应提升格式版本并同步更新此文档和集成测试。
+`formatVersion` 描述 Obsidian Vault 导出包约定，`schemaVersion` 描述题库实体约定。读取工具应检查 `format` 和 `formatVersion`。2.0.0 将实体页面路径从稳定 ID 改为可读标题，并调整题目答案的显示方式；2.1.0 将来源类型和审核状态改为中文展示标签。读取工具应从页面属性读取稳定 ID，不能再从文件名推断 ID。后续改变必需页面、清单字段或字段含义时，应提升格式版本并同步更新此文档和集成测试。

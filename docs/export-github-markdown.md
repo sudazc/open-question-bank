@@ -1,4 +1,4 @@
-# GitHub Markdown 导出 1.1
+# GitHub Markdown 导出 1.2
 
 `oqb export --format github-markdown` 会先按选定模式校验题库，再生成一组可直接在 GitHub 仓库中浏览的 Markdown 页面。源数据仍使用平台无关的 YAML 和 Markdown；此导出格式只在生成目录中创建 GitHub 可用的相对链接。
 
@@ -67,7 +67,7 @@ dist/my-question-bank-github/
 ```json
 {
   "format": "openquestionbank-github-markdown",
-  "formatVersion": "1.1.0",
+  "formatVersion": "1.2.0",
   "schemaVersion": "1.0.0",
   "bank": { "id": "my-question-bank", "name": "我的题库", "version": "1.0.0" },
   "statistics": {
@@ -91,4 +91,4 @@ dist/my-question-bank-github/
 
 ## 兼容策略
 
-`formatVersion` 描述 GitHub Markdown 导出包约定，`schemaVersion` 描述题库实体约定。读取工具应检查 `format` 和 `formatVersion`。1.1.0 为文件名增加大小写安全编码，并将超长 ID 文件名改为 Base36；读取工具应从页面内容读取实体 ID，不要按文件名反推 ID。后续改变必需页面、清单字段、路径规则或字段含义时，应提升格式版本并同步更新文档和集成测试。
+`formatVersion` 描述 GitHub Markdown 导出包约定，`schemaVersion` 描述题库实体约定。读取工具应检查 `format` 和 `formatVersion`。1.1.0 为文件名增加大小写安全编码，并将超长 ID 文件名改为 Base36；1.2.0 将来源类型和审核状态改为中文展示标签。读取工具应从页面内容读取实体 ID，不要按文件名反推 ID。后续改变必需页面、清单字段、路径规则或字段含义时，应提升格式版本并同步更新文档和集成测试。

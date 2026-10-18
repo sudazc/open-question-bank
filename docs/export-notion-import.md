@@ -1,4 +1,4 @@
-# Notion CSV / Markdown 导入包 2.1
+# Notion CSV / Markdown 导入包 2.2
 
 `oqb export --format notion` 会先按所选模式校验题库，再生成一组可手动导入 Notion 的 CSV 数据库、Markdown 页面、关系映射和资源文件。导出格式不调用 Notion API，也不需要 Notion 账号或网络连接。
 
@@ -92,6 +92,6 @@ Notion 的关系属性可以选择是否显示反向属性，以及使用何种�
 
 ## 清单与重复导出
 
-`manifest.json` 包含 `openquestionbank-notion-import` 格式标识、格式版本、Schema 版本、题库版本、实体统计，以及每个生成的 CSV、Markdown 页面和资源的 UTF-8 字节数与 SHA-256。版本 2.0.0 将答案与解析移到单独的 `answers.csv`，并为题目增加可读标题、中文题型显示名和前后题导航。版本 2.1.0 为 Markdown 页面文件名增加大小写安全编码；CSV 字段和关系行语义不变。清单不包含自身校验值，也不写入生成时间。
+`manifest.json` 包含 `openquestionbank-notion-import` 格式标识、格式版本、Schema 版本、题库版本、实体统计，以及每个生成的 CSV、Markdown 页面和资源的 UTF-8 字节数与 SHA-256。版本 2.0.0 将答案与解析移到单独的 `answers.csv`，并为题目增加可读标题、中文题型显示名和前后题导航。版本 2.1.0 为 Markdown 页面文件名增加大小写安全编码；2.2.0 将 Markdown 页面的来源类型和审核状态改为中文展示标签，CSV 中仍保留 Schema 机器值。清单不包含自身校验值，也不写入生成时间。
 
 题库数据和校验模式不变时，导出文件和清单保持一致。重复导出会更新本次生成的文件及当前引用资源；本次不再生成且与上一份 OpenQuestionBank 清单校验值一致的旧文件会移除，用户修改过的旧文件和清单未登记文件会保留。建议使用专用目录，避免和手工文件重名。格式字段、路径规则或关系行语义变化时，应更新 `formatVersion`、此文档和集成测试。
