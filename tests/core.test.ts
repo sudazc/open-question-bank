@@ -40,6 +40,40 @@ describe('OpenQuestionBank Core', () => {
     expect(result.index.examsByGroup.get('group-reading')?.[0]?.id).toBe('exam-fixed');
   });
 
+  it.each([
+    ['相同目录', 'shared', 'shared'],
+    ['互相嵌套的目录', 'shared', 'shared/questions'],
+    ['仅大小写不同的目录', 'shared', 'SHARED'],
+    ['Unicode NFC 归一化后相同的目录', 'caf\u00e9', 'cafe\u0301'],
+    ['实体目录与资源目录嵌套', 'assets', 'questions'],
+  ])('拒绝配置为%s的题库路径', async (_description, topicsPath, questionsPath) => {
+    const questionsDirectory = join(rootDir, questionsPath);
+    await mkdir(questionsDirectory, { recursive: true });
+    await writeFile(join(questionsDirectory, 'question.yaml'), questionYaml('q-one', 'k-one'));
+
+    const bankPath = join(rootDir, 'bank.yaml');
+    const bankContents = await readFile(bankPath, 'utf8');
+    await writeFile(
+      bankPath,
+      bankContents
+        .replace('  topics: topics', `  topics: ${topicsPath}`)
+        .replace('  questions: questions', `  questions: ${questionsPath}`),
+    );
+
+    const result = await validateQuestionBankDirectory(rootDir);
+
+    expect(result.valid).toBe(false);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'OQB-FILE-021',
+        severity: 'error',
+        file: 'bank.yaml',
+        fieldPath: 'paths.topics',
+      }),
+    );
+    expect(result.diagnostics.some(({ code }) => code.startsWith('OQB-SCHEMA-'))).toBe(false);
+  });
+
   it('draft 模式兼容未审核的内容，strict 模式报告发布资格问题', async () => {
     const draft = await validateQuestionBankDirectory(rootDir);
     const strict = await validateQuestionBankDirectory(rootDir, { mode: 'strict' });

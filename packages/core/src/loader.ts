@@ -170,6 +170,16 @@ export async function loadQuestionBank(
     groups: bankValidation.value.paths.groups,
     exams: bankValidation.value.paths.exams,
   };
+  const pathDiagnostics = validateBankDirectoryPaths(
+    absoluteRoot,
+    collections,
+    bankValidation.value.paths.assets,
+  );
+  if (pathDiagnostics.length > 0) {
+    result.diagnostics.push(...pathDiagnostics);
+    return result;
+  }
+
   await validateAssetsDirectory(
     absoluteRoot,
     canonicalRoot,
@@ -379,6 +389,66 @@ async function discoverFiles(
 
   await visit(directoryPath, 0);
   return files;
+}
+
+function validateBankDirectoryPaths(
+  rootDir: string,
+  collections: Record<CollectionName, string>,
+  assetsDirectory: string,
+): Diagnostic[] {
+  const diagnostics: Diagnostic[] = [];
+  const configuredPaths = [
+    ...Object.entries(collections).map(([name, value]) => ({ name, value })),
+    { name: 'assets', value: assetsDirectory },
+  ];
+  const validPaths: Array<{ name: string; value: string; segments: string[] }> = [];
+
+  for (const configuredPath of configuredPaths) {
+    if (!resolveBankRelativePath(rootDir, configuredPath.value)) {
+      continue;
+    }
+
+    validPaths.push({
+      ...configuredPath,
+      segments: normalizeBankDirectorySegments(configuredPath.value),
+    });
+  }
+
+  for (let leftIndex = 0; leftIndex < validPaths.length; leftIndex += 1) {
+    const left = validPaths[leftIndex];
+    if (!left) {
+      continue;
+    }
+    for (let rightIndex = leftIndex + 1; rightIndex < validPaths.length; rightIndex += 1) {
+      const right = validPaths[rightIndex];
+      if (!right || !areOverlappingBankDirectories(left.segments, right.segments)) {
+        continue;
+      }
+      diagnostics.push({
+        code: 'OQB-FILE-021',
+        severity: 'error',
+        message: `题库目录不能相同或互相嵌套：paths.${left.name} 与 paths.${right.name}`,
+        file: bankFilename,
+        fieldPath: `paths.${left.name}`,
+        suggestion: '为各类实体和资源配置互不相同且互不嵌套的相对目录',
+      });
+    }
+  }
+
+  return diagnostics;
+}
+
+function normalizeBankDirectorySegments(relativePath: string): string[] {
+  const segments = relativePath.split('/');
+  if (segments.at(-1) === '') {
+    segments.pop();
+  }
+  return segments.map((segment) => segment.normalize('NFC').toLowerCase());
+}
+
+function areOverlappingBankDirectories(left: readonly string[], right: readonly string[]): boolean {
+  const sharedLength = Math.min(left.length, right.length);
+  return left.slice(0, sharedLength).every((segment, index) => segment === right[index]);
 }
 
 async function validateAssetsDirectory(
