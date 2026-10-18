@@ -6,9 +6,10 @@ import type {
   QuestionGroup,
   Topic,
 } from '@openquestionbank/schema';
-import { maskMarkdownCode } from './asset-validator.js';
+import { decodeMarkdownBackslashEscapes, maskMarkdownCode } from './asset-validator.js';
 import type { Diagnostic } from './diagnostics.js';
 import { getExamRuleCandidates } from './exam-rules.js';
+import { decodeHtmlCharacterReferences } from './html-entities.js';
 import type { LocatedEntity, LocatedQuestionBank } from './types.js';
 
 /** 检查结构有效实体之间的引用、树关系、答案关系和组卷关系 */
@@ -250,7 +251,7 @@ function validateQuestionReferences(
           diagnostics,
           question.file,
           value.id,
-          'OQB-QUESTION-002',
+          'OQB-SCORE-001',
           'unitRule.mode 为 required 时必须提供标准答案单位',
           'answer.unit',
           '填写 answer.unit，并按需在 unitRule.acceptedUnits 中声明等价单位',
@@ -263,7 +264,7 @@ function validateQuestionReferences(
           diagnostics,
           question.file,
           value.id,
-          'OQB-QUESTION-003',
+          'OQB-SCORE-002',
           'acceptedUnits 必须包含标准答案单位',
           'unitRule.acceptedUnits',
           '将 answer.unit 加入 acceptedUnits，或移除该别名列表',
@@ -409,7 +410,7 @@ function validateExamReferences(
         value.bankVersion !== bank.bank.value.version
       ) {
         diagnostics.push({
-          code: 'OQB-EXAM-004',
+          code: 'OQB-VERSION-001',
           severity: 'warning',
           message: `已生成试卷记录的题库版本 ${value.bankVersion} 与当前题库版本 ${bank.bank.value.version} 不一致`,
           file: exam.file,
@@ -651,12 +652,29 @@ function checkMarkdownValue(
   targets: Record<MarkdownTargetKind, ReadonlyMap<string, unknown>>,
   diagnostics: Diagnostic[],
 ): void {
-  const pattern =
-    /\boqb:\/\/(topic|knowledge|question|exam)\/([A-Za-z0-9][A-Za-z0-9._:-]{0,127})(?![A-Za-z0-9._:-])/g;
-  for (const match of maskMarkdownCode(text).matchAll(pattern)) {
-    const kind = match[1] as MarkdownTargetKind | undefined;
-    const id = match[2];
-    if (!kind || !id || targets[kind].has(id)) {
+  const pattern = /\boqb:\/\/([^\s<>"'`)\]]*)/gi;
+  const visibleText = decodeHtmlCharacterReferences(
+    decodeMarkdownBackslashEscapes(maskMarkdownCode(text)),
+  );
+  for (const match of visibleText.matchAll(pattern)) {
+    const reference = match[1] ?? '';
+    const parsedReference =
+      /^(topic|knowledge|question|exam)\/([A-Za-z0-9][A-Za-z0-9._:-]{0,127})$/.exec(reference);
+    const kind = parsedReference?.[1] as MarkdownTargetKind | undefined;
+    const id = parsedReference?.[2];
+    if (!kind || !id) {
+      addDiagnostic(
+        diagnostics,
+        file,
+        entityId,
+        'OQB-REF-004',
+        `Markdown 内部引用格式无效：oqb://${reference}`,
+        field,
+        '使用 oqb://topic/{id}、oqb://knowledge/{id}、oqb://question/{id} 或 oqb://exam/{id}',
+      );
+      continue;
+    }
+    if (targets[kind].has(id)) {
       continue;
     }
     addDiagnostic(

@@ -1,5 +1,9 @@
 import type { Diagnostic } from './diagnostics.js';
-import { extractMarkdownDestinations, maskMarkdownCode } from './asset-validator.js';
+import {
+  decodeMarkdownBackslashEscapes,
+  extractMarkdownDestinations,
+  maskMarkdownCode,
+} from './asset-validator.js';
 import { decodeHtmlCharacterReferences } from './html-entities.js';
 import type { LocatedQuestionBank } from './types.js';
 
@@ -11,9 +15,10 @@ interface ContentField {
 }
 
 const safeHtmlTags = new Set(['br', 'hr', 'sub', 'sup', 'kbd', 'mark', 'details', 'summary']);
+const safeLinkProtocols = new Set(['http', 'https', 'mailto', 'oqb', 'tel']);
 const htmlTagPattern = /<\/?([A-Za-z][A-Za-z0-9:-]*)\b[^<>]*>/g;
 
-/** 拒绝 Markdown 内容中的活动 HTML 与脚本协议链接 */
+/** 拒绝 Markdown 内容中的活动 HTML 与不受支持的链接协议 */
 export function validateContentSecurity(
   bank: LocatedQuestionBank,
   diagnostics: Diagnostic[],
@@ -49,11 +54,11 @@ export function validateContentSecurity(
       diagnostics.push({
         code: 'OQB-SECURITY-002',
         severity: 'error',
-        message: '内容包含不安全的脚本或数据链接协议',
+        message: '内容包含不安全或不受支持的链接协议',
         file: field.file,
         entityId: field.entityId,
         fieldPath: field.fieldPath,
-        suggestion: '移除 javascript、vbscript 和 data 链接，改用题库资源或 HTTPS 地址',
+        suggestion: '外部链接使用 HTTP、HTTPS、mailto 或 tel；内部引用使用合法的 oqb:// 实体地址',
       });
     }
   }
@@ -196,9 +201,6 @@ function isUnsafeDestination(destination: string): boolean {
     }
   }
   const normalized = compact.toLowerCase();
-  return /^(?:javascript|vbscript|data):/.test(normalized);
-}
-
-function decodeMarkdownBackslashEscapes(value: string): string {
-  return value.replace(/\\([\u0021-\u002f\u003a-\u0040\u005b-\u0060\u007b-\u007e])/g, '$1');
+  const protocol = /^([a-z][a-z0-9+.-]*):/.exec(normalized)?.[1];
+  return protocol !== undefined && !safeLinkProtocols.has(protocol);
 }

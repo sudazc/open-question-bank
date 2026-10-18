@@ -576,7 +576,7 @@ function rewriteMarkdown(
   }
 
   const referencePattern =
-    /\boqb:\/\/(topic|knowledge|question|exam)\/([A-Za-z0-9][A-Za-z0-9._:-]{0,127})(?![A-Za-z0-9._:-])/g;
+    /\boqb:\/\/(topic|knowledge|question|exam)\/([A-Za-z0-9][A-Za-z0-9._:-]{0,127})(?![A-Za-z0-9._:-])/gi;
   contents = replaceMarkdownMatches(contents, referencePattern, (match) => {
     const kind = match[1] as EntityKind | undefined;
     const id = match[2];
@@ -587,7 +587,7 @@ function rewriteMarkdown(
     return relativeMarkdownLink(sourcePath, target.path);
   });
 
-  if (/\boqb:\/\//.test(maskMarkdownCode(contents))) {
+  if (/\boqb:\/\//i.test(maskMarkdownCode(contents))) {
     throw new Error(`Markdown 中包含不支持的内部引用：${sourcePath}`);
   }
   return contents;

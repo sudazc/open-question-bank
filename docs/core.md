@@ -101,7 +101,7 @@ const exam = generateExam(validated.data, 'exam-template', 'practice-001');
 
 默认单个实体文件最多读取 2 MiB，题库配置及实体文件累计读取上限为 64 MiB；检测超限时最多额外读取 1 字节。实体文件最多 10,000 个，实体目录最多扫描 50,000 个文件和子目录条目，目录嵌套最多 32 层。YAML 最多展开 50 个别名，拒绝循环别名和超过 128 层的 YAML 结构。被引用资源的累计大小默认最多为 256 MiB；只统计实体 `assets[]` 或 Markdown 链接中声明的资源，同一路径只计一次。被引用的 SVG 文件另有 2 MiB 单文件上限，并以 UTF-8 读取检查；超限、无法解码或包含活动内容时会阻止校验通过。可通过 `LoadOptions` 调整单文件、题库文本累计大小、引用资源累计大小、实体文件数量和目录扫描条目限制；各导出 API 也可通过 `maxTotalAssetBytes` 选项调整资源累计上限。Core 不执行 YAML 自定义代码、不跟随符号链接读取实体文件，也不允许配置目录解析到题库根目录之外。
 
-Markdown 允许常用安全标签 `br`、`hr`、`sub`、`sup`、`kbd`、`mark`、`details` 和 `summary`。其他原始 HTML、文档实体声明以及 `javascript:`、`vbscript:`、`data:` 链接会被拒绝；代码块和行内代码中的示例不参与安全扫描。SVG 只允许静态图形，不允许脚本、事件处理器、样式、动画、外部引用或 XML 实体。该策略会拦截内容，不会把输入改写成经过净化的 HTML。
+Markdown 允许常用安全标签 `br`、`hr`、`sub`、`sup`、`kbd`、`mark`、`details` 和 `summary`。其他原始 HTML、文档实体声明及不受支持的 URI 协议会被拒绝；外部 Markdown 链接只允许 `http:`、`https:`、`mailto:` 和 `tel:`，内部引用必须符合 `oqb://{topic|knowledge|question|exam}/{id}` 格式并指向存在的实体。文件协议和应用专用协议（例如 `obsidian:`、`vscode:`）不允许进入题库正文。代码块和行内代码中的示例不参与安全扫描。SVG 只允许静态图形，不允许脚本、事件处理器、样式、动画、外部引用或 XML 实体。该策略会拦截内容，不会把输入改写成经过净化的 HTML。
 
 内容质量检查会拒绝仅含空白字符的题库名称、许可证、维护者名称、题目难度和答案要点等必填文本；在 strict / release 模式下，许可证空值由授权校验报告。它还会对完全重复的题干，以及经大小写、空白和 Unicode 兼容字符规范化后重复的选择题选项发出警告。警告不阻止草稿校验或导出；内容正确性、难度平衡、干扰项质量等仍需人工审核。
 
@@ -124,3 +124,5 @@ Core 只检查当前 `review.status`，不记录或比较内容审核时的版�
 ## 诊断
 
 每条诊断包含错误码、等级、消息和相对文件路径；可选字段包括实体 ID、字段路径、建议和行列位置。等级为 `fatal` 或 `error` 时 `ValidationResult.valid` 为 `false`；`warning` 和 `info` 不阻止校验通过。`release` 的 `data` 和 `index` 只包含最终筛选结果。
+
+错误码格式为 `OQB-{类别}-{编号}`。`FILE`、`SCHEMA`、`QUESTION`、`SCORE`、`REF`、`GROUP`、`EXAM`、`ASSET`、`QUALITY`、`REVIEW`、`LICENSE` 和 `VERSION` 分别表示文件、结构、题目语义、评分规则、实体引用、材料题组、试卷、资源、内容质量、审核、授权和版本诊断；Core 也会使用 `SECURITY`、`SOURCE`、`TOPIC` 和 `KNOWLEDGE` 表示对应的细分诊断。数值题要求单位但缺少标准答案单位时产生 `OQB-SCORE-001`；`acceptedUnits` 未包含标准答案单位时产生 `OQB-SCORE-002`。已生成试卷记录的题库版本与当前版本不一致时产生非阻断警告 `OQB-VERSION-001`。

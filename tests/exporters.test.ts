@@ -501,7 +501,7 @@ describe('OpenQuestionBank Obsidian Vault 导出器', () => {
             '> [figure-ref]: <assets/triangle.svg>',
             '',
             '[关联题目][question-ref]',
-            '[另一处关联题目](oqb://question/question-single-choice)',
+            '[另一处关联题目](OQB://question/question-single-choice)',
           ].join('\n'),
         },
       ],

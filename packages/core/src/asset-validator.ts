@@ -245,7 +245,7 @@ function normalizeResourcePath(value: string): string | undefined {
 function normalizeMarkdownResourcePath(
   destination: string,
 ): { kind: 'ignored' } | { kind: 'invalid' } | { kind: 'path'; path: string } {
-  const unescaped = decodeHtmlCharacterReferences(unescapeMarkdownDestination(destination));
+  const unescaped = decodeHtmlCharacterReferences(decodeMarkdownBackslashEscapes(destination));
   const queryIndex = unescaped.indexOf('?');
   const fragmentIndex = unescaped.indexOf('#');
   const suffixIndex = [queryIndex, fragmentIndex]
@@ -276,7 +276,7 @@ function normalizeMarkdownResourcePath(
   return path ? { kind: 'path', path } : { kind: 'invalid' };
 }
 
-function unescapeMarkdownDestination(value: string): string {
+export function decodeMarkdownBackslashEscapes(value: string): string {
   let result = '';
   for (let index = 0; index < value.length; index += 1) {
     const character = value[index] ?? '';

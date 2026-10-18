@@ -226,6 +226,52 @@ describe('OpenQuestionBank Core', () => {
     expect(result.diagnostics.filter(({ code }) => code === 'OQB-REF-010')).toHaveLength(count - 1);
   });
 
+  it('将数值题计分规则诊断归入 SCORE 类别', () => {
+    const sharedFields = {
+      stem: '计算结果是多少？',
+      topicIds: [],
+      knowledgeIds: [],
+      difficulty: 'easy',
+      tags: [],
+      score: 1,
+      source: { type: 'original' as const },
+      review: { status: 'draft' as const },
+    };
+    const questions: Question[] = [
+      {
+        ...sharedFields,
+        id: 'q-unit-required',
+        type: 'numeric',
+        answer: { value: '1' },
+        unitRule: { mode: 'required' },
+      },
+      {
+        ...sharedFields,
+        id: 'q-unit-alias',
+        type: 'numeric',
+        answer: { value: '1', unit: 'm' },
+        unitRule: { mode: 'required', acceptedUnits: ['cm'] },
+      },
+    ];
+
+    const result = validateQuestionBank({
+      rootDir,
+      topics: [],
+      knowledge: [],
+      questions: questions.map((value) => ({ file: `questions/${value.id}.yaml`, value })),
+      groups: [],
+      exams: [],
+      diagnostics: [],
+    });
+
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({ code: 'OQB-SCORE-001', entityId: 'q-unit-required' }),
+    );
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({ code: 'OQB-SCORE-002', entityId: 'q-unit-alias' }),
+    );
+  });
+
   it('不把 Markdown 代码中的 oqb URI 当作实际实体引用', async () => {
     const notePath = join(rootDir, 'knowledge/one.md');
     const note = await readFile(notePath, 'utf8');
@@ -239,6 +285,7 @@ describe('OpenQuestionBank Core', () => {
           'oqb://exam/not-an-exam',
           '```',
           '[关联知识](oqb://knowledge/k-two)。',
+          '[大写协议](OQB://knowledge/k-two)。',
         ].join('\n'),
       ),
     );
@@ -247,6 +294,64 @@ describe('OpenQuestionBank Core', () => {
 
     expect(result.valid).toBe(true);
     expect(result.diagnostics.map(({ code }) => code)).not.toContain('OQB-REF-003');
+    expect(result.diagnostics.map(({ code }) => code)).not.toContain('OQB-REF-004');
+  });
+
+  it('拒绝格式无效的 Markdown 内部引用 URI', async () => {
+    const notePath = join(rootDir, 'knowledge/one.md');
+    const note = await readFile(notePath, 'utf8');
+    await writeFile(
+      notePath,
+      note.replace(
+        '正文和引用 [关联知识](oqb://knowledge/k-two)。',
+        [
+          '[未知实体类型](oqb://flashcard/card-one)',
+          '[缺少目标 ID](oqb://knowledge/)',
+          '[多余路径段](oqb://knowledge/k-two/extra)',
+          '[实体编码引用](oqb&#58;//knowledge/missing-entity-encoded)',
+          '[反斜杠转义引用](oqb\\://knowledge/missing-escaped)',
+        ].join('\n'),
+      ),
+    );
+
+    const result = await validateQuestionBankDirectory(rootDir);
+
+    expect(result.valid).toBe(false);
+    expect(result.diagnostics.filter(({ code }) => code === 'OQB-REF-004')).toHaveLength(3);
+    expect(result.diagnostics.filter(({ code }) => code === 'OQB-REF-003')).toHaveLength(2);
+  });
+
+  it('拒绝 Markdown 中的平台特定 URI 协议并允许标准链接', async () => {
+    const notePath = join(rootDir, 'knowledge/one.md');
+    const note = await readFile(notePath, 'utf8');
+    for (const destination of [
+      '[Obsidian](obsidian://open?vault=private)',
+      '[VS Code](vscode://file/C:/private.md)',
+    ]) {
+      await writeFile(
+        notePath,
+        note.replace('正文和引用 [关联知识](oqb://knowledge/k-two)。', destination),
+      );
+      const result = await validateQuestionBankDirectory(rootDir);
+
+      expect(result.valid).toBe(false);
+      expect(result.diagnostics.map(({ code }) => code)).toContain('OQB-SECURITY-002');
+    }
+
+    await writeFile(
+      notePath,
+      note.replace(
+        '正文和引用 [关联知识](oqb://knowledge/k-two)。',
+        [
+          '[网页](https://example.com)',
+          '[邮箱](mailto:reader@example.com)',
+          '[电话](tel:+1234567890)',
+        ].join('\n'),
+      ),
+    );
+    const safeResult = await validateQuestionBankDirectory(rootDir);
+
+    expect(safeResult.valid).toBe(true);
   });
 
   it('要求填空题题干与答案空项一一对应，并忽略 Markdown 代码示例', async () => {
@@ -407,12 +512,12 @@ describe('OpenQuestionBank Core', () => {
     }
 
     const result = await validateQuestionBankDirectory(rootDir);
-    const versionDiagnostics = result.diagnostics.filter(({ code }) => code === 'OQB-EXAM-004');
+    const versionDiagnostics = result.diagnostics.filter(({ code }) => code === 'OQB-VERSION-001');
 
     expect(result.valid).toBe(true);
     expect(versionDiagnostics).toEqual([
       expect.objectContaining({
-        code: 'OQB-EXAM-004',
+        code: 'OQB-VERSION-001',
         severity: 'warning',
         file: 'exams/exam-result-old.yaml',
         entityId: 'exam-result-old',
