@@ -452,12 +452,37 @@ export async function removeManagedExportPathConflicts(
   previousFiles: readonly PreviousExportFile[],
   currentPaths: readonly string[],
 ): Promise<void> {
+  const currentPathsByKey = new Map<string, string>();
+  const currentDescendantByAncestorKey = new Map<string, string>();
+  for (const currentPath of currentPaths) {
+    const pathKey = getPortableExportPathKey(currentPath);
+    currentPathsByKey.set(pathKey, currentPath);
+    const segments = pathKey.split('/');
+    let ancestorKey = '';
+    for (const segment of segments.slice(0, -1)) {
+      ancestorKey = ancestorKey ? `${ancestorKey}/${segment}` : segment;
+      if (!currentDescendantByAncestorKey.has(ancestorKey)) {
+        currentDescendantByAncestorKey.set(ancestorKey, currentPath);
+      }
+    }
+  }
+
   for (const previousFile of previousFiles) {
-    const conflictingPath = currentPaths.find(
-      (currentPath) =>
-        isPortableExportPathAncestor(previousFile.path, currentPath) ||
-        isPortableExportPathAncestor(currentPath, previousFile.path),
-    );
+    const previousPathKey = getPortableExportPathKey(previousFile.path);
+    let conflictingPath = currentDescendantByAncestorKey.get(previousPathKey);
+    let currentPathIsAncestor = false;
+    if (!conflictingPath) {
+      const segments = previousPathKey.split('/');
+      let ancestorKey = '';
+      for (const segment of segments.slice(0, -1)) {
+        ancestorKey = ancestorKey ? `${ancestorKey}/${segment}` : segment;
+        conflictingPath = currentPathsByKey.get(ancestorKey);
+        if (conflictingPath) {
+          currentPathIsAncestor = true;
+          break;
+        }
+      }
+    }
     if (!conflictingPath) {
       continue;
     }
@@ -475,7 +500,7 @@ export async function removeManagedExportPathConflicts(
     }
 
     await rm(target);
-    if (isPortableExportPathAncestor(conflictingPath, previousFile.path)) {
+    if (currentPathIsAncestor) {
       await removeEmptyOutputDirectories(outputRoot, previousFile.path, conflictingPath);
     }
   }
@@ -616,15 +641,6 @@ async function removeEmptyOutputDirectories(
       throw error;
     }
   }
-}
-
-function isPortableExportPathAncestor(parent: string, target: string): boolean {
-  const parentSegments = getPortableExportPathKey(parent).split('/');
-  const targetSegments = getPortableExportPathKey(target).split('/');
-  return (
-    parentSegments.length < targetSegments.length &&
-    parentSegments.every((segment, index) => segment === targetSegments[index])
-  );
 }
 
 async function mayBeSameFile(left: string, right: string): Promise<boolean> {
