@@ -30,7 +30,7 @@ export function normalizeExportAssets(
     if (!Number.isSafeInteger(asset.sizeBytes) || asset.sizeBytes < 0) {
       throw new Error(`资源文件大小无效：${asset.path}`);
     }
-    if (!/^[0-9a-f]{64}$/.test(asset.sha256)) {
+    if (!/^[0-9a-f]{64}(?![\s\S])/.test(asset.sha256)) {
       throw new Error(`资源文件 SHA-256 无效：${asset.path}`);
     }
     assetsByPath.set(asset.path, asset);

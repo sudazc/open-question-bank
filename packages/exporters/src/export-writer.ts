@@ -432,7 +432,7 @@ export async function readPreviousExportFiles(outputRoot: string): Promise<Previ
       typeof sizeBytes !== 'number' ||
       sizeBytes < 0 ||
       typeof sha256 !== 'string' ||
-      !/^[0-9a-f]{64}$/.test(sha256)
+      !/^[0-9a-f]{64}(?![\s\S])/.test(sha256)
     ) {
       continue;
     }

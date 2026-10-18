@@ -35,6 +35,10 @@ describe('OpenQuestionBank CLI', () => {
     ['22.13.1-rc.1', false],
     ['23.0.0-rc.1', false],
     ['invalid', false],
+    ['22.13.0\n', false],
+    ['22.13.0\r', false],
+    ['22.13.0\u2028', false],
+    ['22.13.0\u2029', false],
   ] as const)('按最低版本语义检查 Node.js 版本 %s', (version, expected) => {
     expect(isSupportedNodeVersion(version)).toBe(expected);
   });

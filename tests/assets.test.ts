@@ -656,6 +656,32 @@ describe('Core 资源校验', () => {
     expect(await readFile(outsideFile, 'utf8')).toBe(contents);
   });
 
+  it('忽略旧清单中带末尾换行的 SHA-256', async () => {
+    const outputDir = join(rootDir, 'manifest-checksum-output');
+    const contents = '生成文件';
+    await mkdir(outputDir);
+    await writeFile(join(outputDir, 'generated.txt'), contents);
+    await writeFile(
+      join(outputDir, 'manifest.json'),
+      JSON.stringify({
+        format: 'openquestionbank-json',
+        files: [
+          {
+            path: 'generated.txt',
+            sizeBytes: Buffer.byteLength(contents, 'utf8'),
+            sha256: createHash('sha256').update(contents).digest('hex') + '\n',
+          },
+        ],
+      }),
+    );
+
+    const previousFiles = await readPreviousExportFiles(outputDir);
+    await removeStaleExportFiles(outputDir, previousFiles, []);
+
+    expect(previousFiles).toEqual([]);
+    expect(await readFile(join(outputDir, 'generated.txt'), 'utf8')).toBe(contents);
+  });
+
   it('忽略外部链接和代码片段中的示例链接', async () => {
     await writeFile(
       join(rootDir, 'knowledge/note.md'),

@@ -1,7 +1,7 @@
 /** 检查 Node.js 版本是否达到项目最低要求 */
 export function isSupportedNodeVersion(version: string): boolean {
   const match =
-    /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/u.exec(
+    /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?(?![\s\S])/u.exec(
       version,
     );
   if (!match) {

@@ -114,6 +114,18 @@ describe('OpenQuestionBank JSON 导出器', () => {
 });
 
 describe('各格式共用的导出安全检查', () => {
+  it('拒绝末尾带换行符的资源 SHA-256', () => {
+    expect(() =>
+      createQuestionBankJsonExport(data, [
+        {
+          path: 'assets/triangle.svg',
+          sizeBytes: assetContents.byteLength,
+          sha256: '0'.repeat(64) + '\n',
+        },
+      ]),
+    ).toThrow('SHA-256');
+  });
+
   it.each([
     [
       'Markdown 链接',
