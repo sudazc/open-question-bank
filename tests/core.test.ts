@@ -999,6 +999,11 @@ describe('OpenQuestionBank Core', () => {
     ['行内链接', '[凭据链接](https://user:secret@example.com/private)'],
     ['引用链接', '[凭据链接][secret]\n\n[secret]: https://user:secret@example.com/private'],
     ['正文裸 URL', 'https://user:secret@example.com/private'],
+    ['裸 URL 中 HTML 编码的 authority 分隔符', 'https://user&#64;example.com/private'],
+    [
+      '裸 URL 中 HTML 编码的查询分隔符',
+      'https://example.com/private?q=design&amp;access_token=secret',
+    ],
     ['尖括号自动链接', '<https://user:secret@example.com/private>'],
     ['协议相对链接', '[凭据链接](//user:secret@example.com/private)'],
     ['HTML 字符引用', '[凭据链接](https://user&#64;example.com/private)'],
