@@ -545,6 +545,45 @@ describe('OpenQuestionBank Core', () => {
     );
   });
 
+  it('拒绝无法登记到 assets 的题库简介和考点说明本地资源', async () => {
+    const bankPath = join(rootDir, 'bank.yaml');
+    const bank = await readFile(bankPath, 'utf8');
+    await writeFile(
+      bankPath,
+      bank.replace(
+        'name: 通用示例题库',
+        'name: 通用示例题库\ndescription: "![标志](assets/logo.svg)"',
+      ),
+    );
+
+    const topicPath = join(rootDir, 'topics/root.yaml');
+    const topic = await readFile(topicPath, 'utf8');
+    await writeFile(
+      topicPath,
+      topic.replace('name: 根考点', 'name: 根考点\ndescription: "[资料](assets/topic.pdf)"'),
+    );
+
+    const result = await validateQuestionBankDirectory(rootDir);
+
+    expect(result.valid).toBe(false);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'OQB-ASSET-003',
+        entityId: 'sample-bank',
+        fieldPath: 'description',
+        message: '题库或考点说明不能声明本地资源链接：assets/logo.svg',
+      }),
+    );
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'OQB-ASSET-003',
+        entityId: 'topic-root',
+        fieldPath: 'description',
+        message: '题库或考点说明不能声明本地资源链接：assets/topic.pdf',
+      }),
+    );
+  });
+
   it('拒绝 Markdown 中的平台特定 URI 协议并允许标准链接', async () => {
     const notePath = join(rootDir, 'knowledge/one.md');
     const note = await readFile(notePath, 'utf8');

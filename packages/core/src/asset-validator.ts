@@ -12,6 +12,8 @@ interface AssetEntity {
 }
 
 interface AssetCollections {
+  bank?: AssetEntity;
+  topics: readonly AssetEntity[];
   knowledge: readonly AssetEntity[];
   questions: readonly AssetEntity[];
   groups: readonly AssetEntity[];
@@ -60,6 +62,37 @@ export async function validateAssetReferences(
       fields: [{ path: 'passage', value: getRecord(entity.value)?.passage }],
     })),
   ];
+
+  const metadataEntities = [
+    ...(collections.bank === undefined ? [] : [collections.bank]),
+    ...collections.topics,
+  ];
+  for (const entity of metadataEntities) {
+    const value = getRecord(entity.value);
+    const description = value?.description;
+    if (typeof description !== 'string') {
+      continue;
+    }
+
+    const entityId = typeof value?.id === 'string' ? value.id : undefined;
+    for (const destination of extractMarkdownDestinations(description)) {
+      const normalized = normalizeMarkdownResourcePath(destination);
+      if (normalized.kind === 'ignored') {
+        continue;
+      }
+      addAssetDiagnostic(
+        diagnostics,
+        entity.file,
+        entityId,
+        normalized.kind === 'invalid' ? 'OQB-ASSET-001' : 'OQB-ASSET-003',
+        normalized.kind === 'invalid'
+          ? '题库或考点说明包含无效的本地资源链接：' + destination
+          : '题库或考点说明不能声明本地资源链接：' + normalized.path,
+        'description',
+        '移除本地资源链接，或将资源移至知识正文、题目或题组材料并在对应 assets 中声明',
+      );
+    }
+  }
 
   for (const { entity, fields } of entities) {
     const listedAssets = new Map<string, AssetPathEntry>();

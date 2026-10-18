@@ -257,7 +257,13 @@ export async function loadQuestionBank(
   await validateAssetReferences(
     canonicalRoot,
     bankValidation.value.paths.assets,
-    { knowledge: result.knowledge, questions: result.questions, groups: result.groups },
+    {
+      ...(result.bank === undefined ? {} : { bank: result.bank }),
+      topics: result.topics,
+      knowledge: result.knowledge,
+      questions: result.questions,
+      groups: result.groups,
+    },
     maxTotalAssetBytes,
     result.diagnostics,
   );
