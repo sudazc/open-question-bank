@@ -101,6 +101,32 @@ describe('OpenQuestionBank Core 答案评分', () => {
       }),
     ).toMatchObject({ isCorrect: false, earnedScore: 0 });
 
+    const exactWhitespaceQuestion = {
+      ...normalizedQuestion,
+      answer: {
+        blanks: [
+          {
+            ...normalizedQuestion.answer.blanks[0]!,
+            acceptedAnswers: [' Water '],
+            whitespace: 'exact' as const,
+            caseSensitive: false,
+          },
+        ],
+      },
+    };
+    expect(
+      evaluateQuestionAnswer(exactWhitespaceQuestion, {
+        type: 'fill_blank',
+        valuesByBlankId: { [firstBlank.id]: ' WATER ' },
+      }),
+    ).toMatchObject({ isCorrect: true });
+    expect(
+      evaluateQuestionAnswer(exactWhitespaceQuestion, {
+        type: 'fill_blank',
+        valuesByBlankId: { [firstBlank.id]: 'WATER' },
+      }),
+    ).toMatchObject({ isCorrect: false });
+
     const twoBlankQuestion = {
       ...normalizedQuestion,
       answer: {
@@ -181,6 +207,50 @@ describe('OpenQuestionBank Core 答案评分', () => {
         unit: 'any-unit',
       }),
     ).toMatchObject({ isCorrect: true });
+  });
+
+  it('数值题正确处理负数、零答案及容差边界', () => {
+    const question = findQuestion('numeric');
+    const negativeAnswerQuestion = {
+      ...question,
+      answer: { value: '-100' },
+      tolerance: { absolute: '0', relative: '0.01' },
+      unitRule: { mode: 'optional' as const },
+    };
+
+    expect(
+      evaluateQuestionAnswer(negativeAnswerQuestion, { type: 'numeric', value: '-101' }),
+    ).toMatchObject({ isCorrect: true });
+    expect(
+      evaluateQuestionAnswer(negativeAnswerQuestion, { type: 'numeric', value: '-101.01' }),
+    ).toMatchObject({ isCorrect: false });
+    expect(
+      evaluateQuestionAnswer(negativeAnswerQuestion, { type: 'numeric', value: '101' }),
+    ).toMatchObject({ isCorrect: false });
+
+    const zeroRelativeQuestion = {
+      ...question,
+      answer: { value: '0' },
+      tolerance: { absolute: '0', relative: '0.1' },
+      unitRule: { mode: 'optional' as const },
+    };
+    expect(
+      evaluateQuestionAnswer(zeroRelativeQuestion, { type: 'numeric', value: '-0' }),
+    ).toMatchObject({ isCorrect: true });
+    expect(
+      evaluateQuestionAnswer(zeroRelativeQuestion, { type: 'numeric', value: '0.0001' }),
+    ).toMatchObject({ isCorrect: false });
+
+    const zeroAnswerQuestion = {
+      ...zeroRelativeQuestion,
+      tolerance: { absolute: '0.0001', relative: '0.1' },
+    };
+    expect(
+      evaluateQuestionAnswer(zeroAnswerQuestion, { type: 'numeric', value: '-0.0001' }),
+    ).toMatchObject({ isCorrect: true });
+    expect(
+      evaluateQuestionAnswer(zeroAnswerQuestion, { type: 'numeric', value: '0.0001001' }),
+    ).toMatchObject({ isCorrect: false });
   });
 
   it('简答题交由人工审核，题型不匹配时明确报错', () => {
