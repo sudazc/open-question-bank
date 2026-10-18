@@ -1,7 +1,16 @@
 import { createHash } from 'node:crypto';
-import { mkdtemp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import {
+  mkdtemp,
+  mkdir,
+  readdir,
+  readFile,
+  rename,
+  rm,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
+import { platform, tmpdir } from 'node:os';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   validateQuestionBankDirectory,
@@ -9,6 +18,7 @@ import {
 } from '../packages/core/src/index.js';
 import {
   collectExportAssetSources,
+  copyExportAssets,
   prepareExportDirectory,
   readPreviousExportFiles,
   removeStaleExportFiles,
@@ -17,14 +27,19 @@ import { bank, knowledge } from './fixtures.js';
 
 describe('Core 资源校验', () => {
   let rootDir: string;
+  let externalDir: string | undefined;
 
   beforeEach(async () => {
     rootDir = await mkdtemp(join(tmpdir(), 'oqb-assets-'));
+    externalDir = undefined;
     await createBank(rootDir);
   });
 
   afterEach(async () => {
     await rm(rootDir, { recursive: true, force: true });
+    if (externalDir) {
+      await rm(externalDir, { recursive: true, force: true });
+    }
   });
 
   it('检查知识、题目和题组的资源链接、清单与文件', async () => {
@@ -112,6 +127,42 @@ describe('Core 资源校验', () => {
 
     await expect(collectExportAssetSources(rootDir, data, bank, 3)).rejects.toThrow(
       '题库引用资源累计大小超过限制 3 字节',
+    );
+  });
+
+  it('复制资源前重新验证来源路径，拒绝被替换为题库外目录的路径', async () => {
+    externalDir = await mkdtemp(join(tmpdir(), 'oqb-assets-external-'));
+    const sourceAssetDirectory = join(rootDir, 'assets');
+    const movedAssetDirectory = join(rootDir, 'assets-original');
+    const outsideFile = join(externalDir, 'image.svg');
+    const outputDir = join(rootDir, 'export');
+    const assetPath = 'assets/image.svg';
+    const data: QuestionBankData = {
+      bank,
+      topics: [],
+      knowledge: [
+        {
+          ...knowledge,
+          body: '![图片](assets/image.svg)',
+          assets: [assetPath],
+        },
+      ],
+      questions: [],
+      groups: [],
+      exams: [],
+    };
+    await writeFile(join(rootDir, assetPath), '<svg>题库内资源</svg>');
+    await writeFile(outsideFile, '<svg>题库外内容</svg>');
+    const sources = await collectExportAssetSources(rootDir, data, bank);
+    await mkdir(outputDir);
+
+    await rename(sourceAssetDirectory, movedAssetDirectory);
+    await symlink(externalDir, sourceAssetDirectory, platform() === 'win32' ? 'junction' : 'dir');
+
+    await expect(copyExportAssets(sources, outputDir)).rejects.toThrow('题库资源目录');
+    await expect(readFile(join(outputDir, assetPath), 'utf8')).rejects.toHaveProperty(
+      'code',
+      'ENOENT',
     );
   });
 

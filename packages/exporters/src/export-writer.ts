@@ -1,17 +1,19 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { constants, createReadStream } from 'node:fs';
+import { createReadStream, createWriteStream } from 'node:fs';
 import {
-  copyFile,
   lstat,
   mkdir,
+  open,
   readFile,
   realpath,
   rename,
   rm,
   stat,
+  type FileHandle,
   writeFile,
 } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { pipeline } from 'node:stream/promises';
 import type { Bank } from '@openquestionbank/schema';
 import { defaultMaxTotalAssetBytes, type QuestionBankData } from '@openquestionbank/core';
 import {
@@ -25,6 +27,9 @@ import {
 export interface ExportAssetSource {
   path: string;
   sourcePath: string;
+  sourceRoot: string;
+  assetsRoot: string;
+  sizeBytes: number;
 }
 
 export interface ExportFile {
@@ -83,7 +88,13 @@ export async function collectExportAssetSources(
     if (!isPathWithin(sourceRoot, canonicalFile) || !isPathWithin(assetsRoot, canonicalFile)) {
       throw new Error(`资源文件路径越出题库资源目录：${path}`);
     }
-    assets.push({ path, sourcePath: canonicalFile });
+    assets.push({
+      path,
+      sourcePath: canonicalFile,
+      sourceRoot,
+      assetsRoot,
+      sizeBytes: metadata.size,
+    });
   }
   return assets;
 }
@@ -173,12 +184,65 @@ export async function copyExportAssets(
       }
     }
 
-    await withTemporaryExportFile(target, (temporary) =>
-      copyFile(source.sourcePath, temporary, constants.COPYFILE_EXCL),
-    );
+    const sourceFile = await openExportAssetSource(source);
+    try {
+      await withTemporaryExportFile(target, async (temporary) => {
+        await pipeline(
+          sourceFile.createReadStream({ autoClose: false }),
+          createWriteStream(temporary, { flags: 'wx' }),
+        );
+        const copiedMetadata = await stat(temporary);
+        if (!copiedMetadata.isFile() || copiedMetadata.size !== source.sizeBytes) {
+          throw new Error(`题库资源文件在复制期间发生变化：${source.path}`);
+        }
+      });
+    } finally {
+      await sourceFile.close();
+    }
     assets.push(await describeExportAsset(source.path, target));
   }
   return assets;
+}
+
+/** 打开仍位于题库资源目录中的普通文件 */
+async function openExportAssetSource(source: ExportAssetSource): Promise<FileHandle> {
+  let file: FileHandle | undefined;
+  try {
+    const metadata = await lstat(source.sourcePath);
+    if (metadata.isSymbolicLink() || !metadata.isFile()) {
+      throw new Error(`题库资源目录中的文件在导出期间发生变化：${source.path}`);
+    }
+    file = await open(source.sourcePath, 'r');
+    const openedMetadata = await file.stat();
+    const pathMetadata = await lstat(source.sourcePath);
+    const canonicalPath = await realpath(source.sourcePath);
+    const deviceChanged =
+      metadata.dev !== 0 && openedMetadata.dev !== 0 && metadata.dev !== openedMetadata.dev;
+    const inodeChanged =
+      metadata.ino !== 0 && openedMetadata.ino !== 0 && metadata.ino !== openedMetadata.ino;
+    const pathChanged =
+      pathMetadata.isSymbolicLink() ||
+      !pathMetadata.isFile() ||
+      (pathMetadata.ino !== 0 &&
+        openedMetadata.ino !== 0 &&
+        pathMetadata.ino !== openedMetadata.ino);
+    if (
+      !openedMetadata.isFile() ||
+      deviceChanged ||
+      inodeChanged ||
+      pathChanged ||
+      openedMetadata.size !== source.sizeBytes ||
+      canonicalPath !== source.sourcePath ||
+      !isPathWithin(source.sourceRoot, canonicalPath) ||
+      !isPathWithin(source.assetsRoot, canonicalPath)
+    ) {
+      throw new Error(`题库资源目录中的文件在导出期间发生变化：${source.path}`);
+    }
+    return file;
+  } catch (error) {
+    await file?.close();
+    throw error;
+  }
 }
 
 /** 以 UTF-8 和临时文件替换方式写入导出文本 */
