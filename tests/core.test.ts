@@ -1312,6 +1312,16 @@ describe('OpenQuestionBank Core', () => {
     expect(() => parseYamlDocument('loop: &loop\n  self: *loop')).toThrow('循环别名');
   });
 
+  it('拒绝通过已解析别名绕过 YAML 嵌套深度限制', () => {
+    const source = ['base: &base', '  marker: value', 'deep:'];
+    for (let index = 0; index < 130; index += 1) {
+      source.push(`${'  '.repeat(index + 1)}level-${index}:`);
+    }
+    source.push(`${'  '.repeat(131)}target: *base`);
+
+    expect(() => parseYamlDocument(source.join('\n'))).toThrow('嵌套超过 128 层');
+  });
+
   it('达到题库累计输入大小上限后停止继续读取实体', async () => {
     const bankBytes = (await readFile(join(rootDir, 'bank.yaml'))).byteLength;
     const firstTopicBytes = (await readFile(join(rootDir, 'topics/child.yaml'))).byteLength;

@@ -1,5 +1,7 @@
 import { parse } from 'yaml';
 
+const maximumYamlNestingDepth = 128;
+
 export interface ParsedMarkdownDocument {
   metadata: Record<string, unknown>;
   body: string;
@@ -83,6 +85,7 @@ function getPosition(error: Error): { line?: number; column?: number } {
 
 function assertAcyclic(value: unknown): void {
   const states = new WeakMap<object, 'active' | 'complete'>();
+  const subtreeHeights = new WeakMap<object, number>();
   const pending: Array<{ value: unknown; depth: number; exit: boolean }> = [
     { value, depth: 0, exit: false },
   ];
@@ -93,6 +96,17 @@ function assertAcyclic(value: unknown): void {
     }
     const state = states.get(current.value);
     if (current.exit) {
+      const children = Array.isArray(current.value) ? current.value : Object.values(current.value);
+      let subtreeHeight = 0;
+      for (const child of children) {
+        if (typeof child === 'object' && child !== null) {
+          subtreeHeight = Math.max(subtreeHeight, (subtreeHeights.get(child) ?? 0) + 1);
+        }
+      }
+      if (current.depth + subtreeHeight > maximumYamlNestingDepth) {
+        throw new DocumentParseError(`YAML 文档嵌套超过 ${maximumYamlNestingDepth} 层`);
+      }
+      subtreeHeights.set(current.value, subtreeHeight);
       states.set(current.value, 'complete');
       continue;
     }
@@ -100,10 +114,13 @@ function assertAcyclic(value: unknown): void {
       throw new DocumentParseError('YAML 文档包含循环别名');
     }
     if (state === 'complete') {
+      if (current.depth + (subtreeHeights.get(current.value) ?? 0) > maximumYamlNestingDepth) {
+        throw new DocumentParseError(`YAML 文档嵌套超过 ${maximumYamlNestingDepth} 层`);
+      }
       continue;
     }
-    if (current.depth > 128) {
-      throw new DocumentParseError('YAML 文档嵌套超过 128 层');
+    if (current.depth > maximumYamlNestingDepth) {
+      throw new DocumentParseError(`YAML 文档嵌套超过 ${maximumYamlNestingDepth} 层`);
     }
     states.set(current.value, 'active');
     pending.push({ value: current.value, depth: current.depth, exit: true });
