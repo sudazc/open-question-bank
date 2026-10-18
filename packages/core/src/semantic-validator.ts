@@ -11,6 +11,7 @@ import type { Diagnostic } from './diagnostics.js';
 import { getExamRuleCandidates } from './exam-rules.js';
 import { decodeHtmlCharacterReferences } from './html-entities.js';
 import type { LocatedEntity, LocatedQuestionBank } from './types.js';
+import { hasUrlAuthorityCredentials, parseHttpUrl } from './url-security.js';
 
 /** 检查结构有效实体之间的引用、树关系、答案关系和组卷关系 */
 export function validateSemantics(bank: LocatedQuestionBank, diagnostics: Diagnostic[]): void {
@@ -37,10 +38,7 @@ function validateSourceUrls(bank: LocatedQuestionBank, diagnostics: Diagnostic[]
     const source = entity.value.source;
     if (source.url !== undefined) {
       const url = parseHttpUrl(source.url);
-      if (
-        (url !== undefined && (url.username !== '' || url.password !== '')) ||
-        hasUrlAuthorityCredentials(source.url)
-      ) {
+      if (hasUrlAuthorityCredentials(source.url)) {
         diagnostics.push({
           code: 'OQB-SOURCE-003',
           severity: 'error',
@@ -75,22 +73,6 @@ function validateSourceUrls(bank: LocatedQuestionBank, diagnostics: Diagnostic[]
       });
     }
   }
-}
-
-function parseHttpUrl(value: string): URL | undefined {
-  try {
-    const url = new URL(value.trim());
-    return (url.protocol === 'http:' || url.protocol === 'https:') && url.hostname.length > 0
-      ? url
-      : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-function hasUrlAuthorityCredentials(value: string): boolean {
-  const authority = /^(?:[a-z][a-z\d+.-]*:)?[\\/]{2}([^/?#\\]*)/i.exec(value.trim())?.[1];
-  return authority !== undefined && authority.lastIndexOf('@') > 0;
 }
 
 type EntityMap<T> = Map<string, LocatedEntity<T>>;

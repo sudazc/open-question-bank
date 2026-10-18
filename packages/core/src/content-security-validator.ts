@@ -6,6 +6,7 @@ import {
 } from './asset-validator.js';
 import { decodeHtmlCharacterReferences } from './html-entities.js';
 import type { LocatedQuestionBank } from './types.js';
+import { hasUrlAuthorityCredentials } from './url-security.js';
 
 interface ContentField {
   value: string;
@@ -50,6 +51,7 @@ export function validateContentSecurity(
     }
 
     const destinations = extractMarkdownDestinations(field.value);
+    const linkedUrls = [...destinations, ...extractHttpUrls(field.value)];
     if (
       destinations.some(isUnsafeDestination) ||
       /<\s*(?:javascript|vbscript|data)\s*:/i.test(searchable)
@@ -62,6 +64,17 @@ export function validateContentSecurity(
         entityId: field.entityId,
         fieldPath: field.fieldPath,
         suggestion: '外部链接使用 HTTP、HTTPS、mailto 或 tel；内部引用使用合法的 oqb:// 实体地址',
+      });
+    }
+    if (linkedUrls.some(hasDestinationCredentials)) {
+      diagnostics.push({
+        code: 'OQB-SECURITY-003',
+        severity: 'error',
+        message: 'Markdown 链接目标不得包含用户名或密码',
+        file: field.file,
+        entityId: field.entityId,
+        fieldPath: field.fieldPath,
+        suggestion: '移除 URL authority 中的用户名和密码，改用不含访问凭据的链接',
       });
     }
   }
@@ -195,6 +208,16 @@ function isSafeHtmlTag(tag: string): boolean {
 }
 
 function isUnsafeDestination(destination: string): boolean {
+  const normalized = normalizeDestination(destination).toLowerCase();
+  const protocol = /^([a-z][a-z0-9+.-]*):/.exec(normalized)?.[1];
+  return protocol !== undefined && !safeLinkProtocols.has(protocol);
+}
+
+function hasDestinationCredentials(destination: string): boolean {
+  return hasUrlAuthorityCredentials(normalizeDestination(destination));
+}
+
+function normalizeDestination(destination: string): string {
   const decoded = decodeHtmlCharacterReferences(decodeMarkdownBackslashEscapes(destination));
   let compact = '';
   for (const character of decoded) {
@@ -203,7 +226,16 @@ function isUnsafeDestination(destination: string): boolean {
       compact += character;
     }
   }
-  const normalized = compact.toLowerCase();
-  const protocol = /^([a-z][a-z0-9+.-]*):/.exec(normalized)?.[1];
-  return protocol !== undefined && !safeLinkProtocols.has(protocol);
+  return compact;
+}
+
+function extractHttpUrls(markdown: string): string[] {
+  const urls: string[] = [];
+  for (const match of maskMarkdownCode(markdown).matchAll(/\bhttps?:\/\/[^\s<>"'`]+/gi)) {
+    const url = match[0];
+    if (url) {
+      urls.push(url);
+    }
+  }
+  return urls;
 }
