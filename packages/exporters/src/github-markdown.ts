@@ -14,7 +14,7 @@ import {
   normalizeExportAssets,
   type ExportAsset,
 } from './export-common.js';
-import { maskMarkdownCode } from './markdown-utils.js';
+import { escapeMarkdownHeading, escapeMarkdownText, maskMarkdownCode } from './markdown-utils.js';
 import type { ExportFile } from './export-writer.js';
 
 const format = 'openquestionbank-github-markdown';
@@ -336,7 +336,7 @@ function renderQuestionFiles(
       answerMarkers.end,
     ].join('\n\n');
     const sections = [
-      `# ${escapeMarkdownHeading(singleLine(question.stem))}`,
+      `# ${escapeMarkdownHeading(question.stem)}`,
       renderIdentity(
         question.id,
         `${question.type} · ${question.difficulty} · ${question.score} 分`,
@@ -929,38 +929,8 @@ function escapeMarkdownLinkLabel(value: string): string {
     .replace(/\r?\n/g, ' ');
 }
 
-function escapeMarkdownHeading(value: string): string {
-  return escapeMarkdownText(singleLine(value));
-}
-
-function escapeMarkdownText(value: string): string {
-  return value
-    .replace(/\\/g, '\\\\')
-    .replaceAll('`', '\\`')
-    .replaceAll('*', '\\*')
-    .replaceAll('_', '\\_')
-    .replaceAll('{', '\\{')
-    .replaceAll('}', '\\}')
-    .replaceAll('[', '\\[')
-    .replaceAll(']', '\\]')
-    .replaceAll('(', '\\(')
-    .replaceAll(')', '\\)')
-    .replaceAll('#', '\\#')
-    .replaceAll('+', '\\+')
-    .replaceAll('.', '\\.')
-    .replaceAll('!', '\\!')
-    .replaceAll('|', '\\|')
-    .replaceAll('>', '\\>')
-    .replace(/</g, '&lt;')
-    .replace(/\r?\n/g, ' ');
-}
-
 function escapeInlineCode(value: string): string {
   return value.replace(/`/g, '\\`');
-}
-
-function singleLine(value: string): string {
-  return value.replace(/\s+/g, ' ').trim();
 }
 
 function normalizeMarkdown(value: string): string {

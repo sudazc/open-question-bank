@@ -5,6 +5,7 @@ import {
   normalizeExportAssets,
   type ExportAsset,
 } from './export-common.js';
+import { escapeMarkdownHeading } from './markdown-utils.js';
 import {
   createQuestionBankGithubMarkdownExport,
   findQuestionAnswerSection,
@@ -430,7 +431,10 @@ function prepareNotionQuestionPage(
   question: QuestionEntity,
   navigation: QuestionNavigation | undefined,
 ): string {
-  let result = markdown.replace(/^# .+$/m, '# ' + questionTitle(question.stem));
+  let result = markdown.replace(
+    /^# .+$/m,
+    () => '# ' + escapeMarkdownHeading(questionTitle(question.stem)),
+  );
   const identityLine = /^> (稳定 ID：.*?)(?: · (.*))?$/m.exec(result);
   if (identityLine?.[2]) {
     const details = identityLine[2].split(' · ');
@@ -626,7 +630,7 @@ function renderReadme(data: QuestionBankData, assets: readonly ExportAsset[]): s
     throw new Error('Notion 导出要求存在有效的 Bank 实体');
   }
   return [
-    `# ${bank.name} · Notion 导入包`,
+    `# ${escapeMarkdownHeading(bank.name)} · Notion 导入包`,
     '',
     `题库稳定 ID：\`${bank.id}\` · 版本：${bank.version} · Schema：${bank.schemaVersion}`,
     '',

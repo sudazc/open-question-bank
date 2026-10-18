@@ -774,6 +774,29 @@ describe('OpenQuestionBank Obsidian Vault 导出器', () => {
 });
 
 describe('OpenQuestionBank Notion 导入包导出器', () => {
+  it('将多行题库名称和转义的题干安全渲染为 Markdown 标题', () => {
+    const questionId = 'question-single-choice';
+    const notionData: QuestionBankData = {
+      ...data,
+      bank: { ...bank, name: '通用题库\n## 伪造标题' },
+      questions: data.questions.map((question) =>
+        question.id === questionId
+          ? { ...question, stem: String.raw`\[点击\]\(javascript:alert(1)\) $& $'` }
+          : question,
+      ),
+    };
+    const files = createQuestionBankNotionExport(notionData, assets).files;
+    const readme = files.find(({ path }) => path === 'README.md')?.contents;
+    const questionPage = files.find(
+      ({ path }) => path === 'questions/id-question-single-choice.md',
+    )?.contents;
+
+    expect(readme?.split('\n')[0]).toBe('# 通用题库 \\#\\# 伪造标题 · Notion 导入包');
+    expect(readme).not.toContain('\n## 伪造标题');
+    expect(questionPage?.split('\n')[0]).toBe("# \\[点击\\]\\(javascript:alert\\(1\\)\\) $& $'");
+    expect(questionPage).not.toContain('[点击](javascript:alert(1))');
+  });
+
   it('生成题目与答案分离的数据库、练习页面、关系映射和发布清单', () => {
     const exported = createQuestionBankNotionExport(data, assets);
     const topicsCsv = exported.files.find(({ path }) => path === 'databases/topics.csv')?.contents;

@@ -1,3 +1,31 @@
+/** 将文本转义为可安全展示的 Markdown 内容 */
+export function escapeMarkdownText(value: string): string {
+  return value
+    .replace(/\\/g, '\\\\')
+    .replaceAll('`', '\\`')
+    .replaceAll('*', '\\*')
+    .replaceAll('_', '\\_')
+    .replaceAll('{', '\\{')
+    .replaceAll('}', '\\}')
+    .replaceAll('[', '\\[')
+    .replaceAll(']', '\\]')
+    .replaceAll('(', '\\(')
+    .replaceAll(')', '\\)')
+    .replaceAll('#', '\\#')
+    .replaceAll('+', '\\+')
+    .replaceAll('.', '\\.')
+    .replaceAll('!', '\\!')
+    .replaceAll('|', '\\|')
+    .replaceAll('>', '\\>')
+    .replace(/</g, '&lt;')
+    .replace(/\r?\n/g, ' ');
+}
+
+/** 将文本压缩并转义为单行 Markdown 标题 */
+export function escapeMarkdownHeading(value: string): string {
+  return escapeMarkdownText(value.replace(/\s+/g, ' ').trim());
+}
+
 /** 屏蔽 Markdown 行内代码、围栏和缩进代码块并保留字符位置 */
 export function maskMarkdownCode(markdown: string): string {
   const characters = markdown.split('');
