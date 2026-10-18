@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { validateQuestionBankDirectory } from '../packages/core/src/index.js';
 import { runCli, type CliOutput } from '../packages/cli/src/index.js';
+import { isSupportedNodeVersion } from '../packages/cli/src/node-version.js';
 
 describe('OpenQuestionBank CLI', () => {
   let rootDir: string;
@@ -25,6 +26,17 @@ describe('OpenQuestionBank CLI', () => {
 
   afterEach(async () => {
     await rm(rootDir, { recursive: true, force: true });
+  });
+
+  it.each([
+    ['22.12.99', false],
+    ['22.13.0', true],
+    ['22.13.0-rc.1', false],
+    ['22.13.1-rc.1', false],
+    ['23.0.0-rc.1', false],
+    ['invalid', false],
+  ] as const)('按最低版本语义检查 Node.js 版本 %s', (version, expected) => {
+    expect(isSupportedNodeVersion(version)).toBe(expected);
   });
 
   it('初始化可校验的题库模板', async () => {

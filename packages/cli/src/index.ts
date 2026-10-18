@@ -17,6 +17,7 @@ import {
   writeQuestionBankNotionExport,
   writeQuestionBankObsidianVaultExport,
 } from '@openquestionbank/exporters';
+import { isSupportedNodeVersion } from './node-version.js';
 
 const validationModes = ['draft', 'strict', 'release'] as const satisfies readonly ValidationMode[];
 const exportFormats = ['json', 'github-markdown', 'obsidian', 'notion'] as const;
@@ -292,7 +293,7 @@ async function doctorCommand(
   output: CliOutput,
 ): Promise<number> {
   const root = resolve(directory);
-  const supportedNode = isSupportedNode(process.versions.node);
+  const supportedNode = isSupportedNodeVersion(process.versions.node);
   const result = await validateQuestionBankDirectory(root, { mode });
   output.stdout(`环境诊断：${root}`);
   output.stdout(
@@ -459,11 +460,6 @@ function parseExportFormatAlias(
     return 'github-markdown';
   }
   return isExportFormat(value) ? value : undefined;
-}
-
-function isSupportedNode(version: string): boolean {
-  const [major = 0, minor = 0] = version.split('.').map(Number);
-  return major > 22 || (major === 22 && minor >= 13);
 }
 
 function isMissingPath(error: unknown): boolean {
