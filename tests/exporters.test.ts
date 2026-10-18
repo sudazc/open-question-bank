@@ -148,6 +148,41 @@ describe('跨平台导出文件名', () => {
 });
 
 describe('OpenQuestionBank GitHub Markdown 导出器', () => {
+  it('在 Markdown 页面中显示中文来源和审核状态，Notion CSV 保留机器值', () => {
+    const sourceTypes = ['original', 'official_public', 'licensed', 'adapted', 'unknown'] as const;
+    const reviewStatuses = ['draft', 'pending', 'approved', 'deprecated'] as const;
+    const localizedData: QuestionBankData = {
+      ...data,
+      questions: data.questions.map((question, index) => ({
+        ...question,
+        source: { type: sourceTypes[index % sourceTypes.length] ?? 'original' },
+        review: { status: reviewStatuses[index % reviewStatuses.length] ?? 'draft' },
+      })),
+    };
+
+    const githubExport = createQuestionBankGithubMarkdownExport(localizedData, assets);
+    const obsidianExport = createQuestionBankObsidianVaultExport(localizedData, assets);
+    const notionExport = createQuestionBankNotionExport(localizedData, assets);
+    const markdownContents = [...githubExport.files, ...obsidianExport.files, ...notionExport.files]
+      .filter(({ path }) => path.endsWith('.md'))
+      .map(({ contents }) => contents)
+      .join('\n');
+    const questionsCsv = notionExport.files.find(
+      ({ path }) => path === 'databases/questions.csv',
+    )?.contents;
+
+    for (const label of ['原创', '官方公开资料', '已获许可', '改编', '未知']) {
+      expect(markdownContents).toContain(`来源类型：${label}`);
+    }
+    for (const label of ['草稿', '待审核', '审核通过', '已弃用']) {
+      expect(markdownContents).toContain(`审核状态：${label}`);
+    }
+    expect(questionsCsv).toContain('""type"":""original""');
+    expect(questionsCsv).toContain('""status"":""draft""');
+    expect(questionsCsv).toContain('""type"":""official_public""');
+    expect(questionsCsv).toContain('""status"":""pending""');
+  });
+
   it('生成可浏览的实体页面、重写内部链接和资源路径，并记录校验值', () => {
     const githubData: QuestionBankData = {
       ...data,

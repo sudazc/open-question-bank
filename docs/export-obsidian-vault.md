@@ -61,6 +61,8 @@ dist/my-question-bank-obsidian/
 
 题目选项不标记正确答案。答案和解析放在 Obsidian 折叠 callout 中，首次打开页面时默认收起。答案仍保留在生成的 Markdown 源文件中，展开“显示答案与解析”后可以查看。
 
+Markdown 页面中的来源类型和审核状态使用中文标签展示，例如“原创”“官方公开资料”“草稿”和“审核通过”。Notion CSV、Schema 和题库源文件仍保留 `original`、`draft` 等机器值。
+
 ## Wiki 链接和资源
 
 - 题库首页和分类索引之间使用 Obsidian Wiki 链接。

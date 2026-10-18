@@ -20,6 +20,21 @@ import type { ExportFile } from './export-writer.js';
 const format = 'openquestionbank-github-markdown';
 const formatVersion = '1.1.0';
 
+const sourceTypeLabels: Record<Question['source']['type'], string> = {
+  original: '原创',
+  official_public: '官方公开资料',
+  licensed: '已获许可',
+  adapted: '改编',
+  unknown: '未知',
+};
+
+const reviewStatusLabels: Record<Question['review']['status'], string> = {
+  draft: '草稿',
+  pending: '待审核',
+  approved: '审核通过',
+  deprecated: '已弃用',
+};
+
 type EntityKind = 'topic' | 'knowledge' | 'question' | 'group' | 'exam';
 
 interface EntityTarget {
@@ -539,13 +554,13 @@ function renderTags(tags: readonly string[]): string {
 
 function renderSourceAndReview(source: Question['source'], review: Question['review']): string {
   const fields = [
-    `来源类型：${escapeMarkdownText(source.type)}`,
+    `来源类型：${escapeMarkdownText(sourceTypeLabels[source.type])}`,
     ...(source.title ? [`来源标题：${escapeMarkdownText(source.title)}`] : []),
     ...(source.author ? [`作者：${escapeMarkdownText(source.author)}`] : []),
     ...(source.url ? [`来源链接：${escapeMarkdownText(source.url)}`] : []),
     ...(source.license ? [`来源许可证：${escapeMarkdownText(source.license)}`] : []),
     ...(source.attribution ? [`署名：${escapeMarkdownText(source.attribution)}`] : []),
-    `审核状态：${escapeMarkdownText(review.status)}`,
+    `审核状态：${escapeMarkdownText(reviewStatusLabels[review.status])}`,
     ...(review.reviewer ? [`审核人：${escapeMarkdownText(review.reviewer)}`] : []),
     ...(review.reviewedAt ? [`审核时间：${escapeMarkdownText(review.reviewedAt)}`] : []),
     ...(review.notes ? [`审核备注：${escapeMarkdownText(review.notes)}`] : []),
