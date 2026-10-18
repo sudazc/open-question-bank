@@ -629,17 +629,22 @@ async function readDocument(
     return { value: { ...parsed.metadata, body: parsed.body }, bytesRead };
   } catch (error) {
     const parseError = error instanceof DocumentParseError ? error : undefined;
+    const missingBankFile = relativePath === bankFilename && isMissingPath(error);
     return {
       diagnostic: {
-        code: parseError ? 'OQB-FILE-008' : 'OQB-FILE-009',
+        code: parseError ? 'OQB-FILE-008' : missingBankFile ? 'OQB-FILE-002' : 'OQB-FILE-009',
         severity: 'error',
-        message: errorMessage(error, '无法读取或解析文件'),
+        message: missingBankFile
+          ? `题库根目录缺少必需文件 ${bankFilename}`
+          : errorMessage(error, '无法读取或解析文件'),
         file: relativePath,
         ...(parseError?.line === undefined ? {} : { line: parseError.line }),
         ...(parseError?.column === undefined ? {} : { column: parseError.column }),
         suggestion: parseError
           ? '检查 YAML 语法与 Markdown Front Matter 分隔线'
-          : '确认文件编码为 UTF-8 且当前进程具有读取权限',
+          : missingBankFile
+            ? '在题库根目录创建 bank.yaml，或运行 `oqb init <目录>` 生成有效模板'
+            : '确认文件存在、编码为 UTF-8 且当前进程具有读取权限',
       },
       ...(bytesRead > 0 ? { bytesRead } : {}),
     };

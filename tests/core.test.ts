@@ -40,6 +40,24 @@ describe('OpenQuestionBank Core', () => {
     expect(result.index.examsByGroup.get('group-reading')?.[0]?.id).toBe('exam-fixed');
   });
 
+  it('缺少 bank.yaml 时提示创建题库配置', async () => {
+    await rm(join(rootDir, 'bank.yaml'));
+
+    const result = await validateQuestionBankDirectory(rootDir);
+
+    expect(result.valid).toBe(false);
+    expect(result.data.bank).toBeUndefined();
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'OQB-FILE-002',
+        severity: 'fatal',
+        file: 'bank.yaml',
+        message: '题库根目录缺少必需文件 bank.yaml',
+        suggestion: expect.stringContaining('oqb init'),
+      }),
+    );
+  });
+
   it.each([
     ['相同目录', 'shared', 'shared'],
     ['互相嵌套的目录', 'shared', 'shared/questions'],
