@@ -276,6 +276,32 @@ describe('OpenQuestionBank Core', () => {
     ).toHaveLength(1);
   });
 
+  it.skipIf(platform() !== 'linux')('检测无关文件与实体子目录的跨平台路径冲突', async () => {
+    const directory = join(rootDir, 'questions', 'sets.txt');
+    await mkdir(directory, { recursive: true });
+    await writeFile(
+      join(directory, 'question.yaml'),
+      questionYaml('q-ignored-file-collision', 'k-one'),
+    );
+    await writeFile(join(rootDir, 'questions', 'SETS.TXT'), 'ignored');
+
+    const result = await validateQuestionBankDirectory(rootDir);
+
+    expect(result.valid).toBe(false);
+    expect(result.diagnostics.some(({ code }) => code === 'OQB-FILE-023')).toBe(true);
+    expect(result.data.questions.map(({ id }) => id)).toContain('q-ignored-file-collision');
+  });
+
+  it.skipIf(platform() !== 'linux')('忽略彼此重名的无关扩展名文件', async () => {
+    await writeFile(join(rootDir, 'questions', 'NOTES.TXT'), 'ignored');
+    await writeFile(join(rootDir, 'questions', 'notes.txt'), 'ignored');
+
+    const result = await validateQuestionBankDirectory(rootDir);
+
+    expect(result.valid).toBe(true);
+    expect(result.diagnostics.some(({ code }) => code === 'OQB-FILE-023')).toBe(false);
+  });
+
   it.each([
     ['实体', 'questions', 0],
     ['资源', 'assets', 2],

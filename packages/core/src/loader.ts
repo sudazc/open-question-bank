@@ -280,18 +280,31 @@ async function discoverFiles(
   scanBudget: DirectoryScanBudget,
 ): Promise<DiscoveredFile[]> {
   const files: DiscoveredFile[] = [];
-  const portablePaths = new Map<string, string>();
+  const portablePaths = new Map<
+    string,
+    { path: string; kind: 'directory' | 'entity' | 'ignored' }
+  >();
   const expectedExtensions = supportedExtensions[collection];
   let limitReached = false;
 
-  function registerPortablePath(relativePath: string): boolean {
+  function registerPortablePath(
+    relativePath: string,
+    kind: 'directory' | 'entity' | 'ignored',
+  ): boolean {
     const key = getPortableEntityPathKey(relativePath);
     const existingPath = portablePaths.get(key);
     if (existingPath !== undefined) {
-      diagnostics.push(createEntityPathCollisionDiagnostic(existingPath, relativePath));
+      if (existingPath.kind === 'ignored' && kind === 'ignored') {
+        return true;
+      }
+      diagnostics.push(createEntityPathCollisionDiagnostic(existingPath.path, relativePath));
+      if (existingPath.kind === 'ignored' && kind !== 'ignored') {
+        portablePaths.set(key, { path: relativePath, kind });
+        return true;
+      }
       return false;
     }
-    portablePaths.set(key, relativePath);
+    portablePaths.set(key, { path: relativePath, kind });
     return true;
   }
 
@@ -385,7 +398,7 @@ async function discoverFiles(
           diagnostics.push(createInvalidEntityPathDiagnostic(relativePath));
           continue;
         }
-        if (!registerPortablePath(relativePath)) {
+        if (!registerPortablePath(relativePath, 'directory')) {
           continue;
         }
         await visit(fullPath, depth + 1);
@@ -396,13 +409,14 @@ async function discoverFiles(
       }
       const extension = entry.name.slice(entry.name.lastIndexOf('.')).toLowerCase();
       if (!expectedExtensions.includes(extension)) {
+        registerPortablePath(relativePath, 'ignored');
         continue;
       }
       if (!isPortableBankPathSegment(entry.name)) {
         diagnostics.push(createInvalidEntityPathDiagnostic(relativePath));
         continue;
       }
-      if (!registerPortablePath(relativePath)) {
+      if (!registerPortablePath(relativePath, 'entity')) {
         continue;
       }
       if (files.length >= remainingFiles) {
