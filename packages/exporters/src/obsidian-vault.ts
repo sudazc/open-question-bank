@@ -3,7 +3,11 @@ import { posix } from 'node:path';
 import type { Question } from '@openquestionbank/schema';
 import type { QuestionBankData } from '@openquestionbank/core';
 import { maskMarkdownCode } from './markdown-utils.js';
-import { assertUniquePortableExportPaths, type ExportAsset } from './export-common.js';
+import {
+  assertUniquePortableExportPaths,
+  getPortableExportPathKey,
+  type ExportAsset,
+} from './export-common.js';
 import type { ExportFile } from './export-writer.js';
 import {
   createQuestionBankGithubMarkdownExport,
@@ -390,16 +394,16 @@ function createEntityPageTargets(data: QuestionBankData): EntityPageTarget[] {
   const usedNames = new Map<string, Set<string>>();
   return entities.map((entity) => {
     const directory = directoryByKind[entity.kind];
-    const used = usedNames.get(directory) ?? new Set(['索引']);
+    const used = usedNames.get(directory) ?? new Set([getPortableExportPathKey('索引')]);
     usedNames.set(directory, used);
     const baseName = safePageTitle(entity.title, entity.kind);
     let fileName = baseName;
     let suffix = 2;
-    while (used.has(fileName.toLocaleLowerCase('en-US'))) {
+    while (used.has(getPortableExportPathKey(fileName))) {
       fileName = baseName + ' (' + suffix + ')';
       suffix += 1;
     }
-    used.add(fileName.toLocaleLowerCase('en-US'));
+    used.add(getPortableExportPathKey(fileName));
     return {
       ...entity,
       title: fileName,

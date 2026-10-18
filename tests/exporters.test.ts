@@ -728,6 +728,23 @@ describe('OpenQuestionBank Obsidian Vault 导出器', () => {
     expect(new Set(questionPaths).size).toBe(data.questions.length);
   });
 
+  it('按跨平台比较规则消解 Unicode 标题大小写冲突', () => {
+    const exported = createQuestionBankObsidianVaultExport(
+      {
+        ...data,
+        topics: [
+          ...data.topics,
+          { ...topic, id: 'a-title-collision', name: 'Straße' },
+          { ...topic, id: 'b-title-collision', name: 'STRASSE' },
+        ],
+      },
+      assets,
+    );
+
+    expect(exported.files.map(({ path }) => path)).toContain('考点/Straße.md');
+    expect(exported.files.map(({ path }) => path)).toContain('考点/STRASSE (2).md');
+  });
+
   it('对实体输入顺序变化保持相同输出', () => {
     const reordered = createQuestionBankObsidianVaultExport(
       {
