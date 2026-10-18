@@ -22,7 +22,7 @@ const prereleaseIdentifier = `(?:${numericIdentifier}|${nonNumericIdentifier})`;
 const versionPattern = new RegExp(
   `^(?:0|[1-9]\\d*)\\.(?:0|[1-9]\\d*)\\.(?:0|[1-9]\\d*)` +
     `(?:-${prereleaseIdentifier}(?:\\.${prereleaseIdentifier})*)?` +
-    `(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$`,
+    `(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?(?![\\s\\S])`,
 );
 
 if (!versionPattern.test(rootPackage.version)) {
