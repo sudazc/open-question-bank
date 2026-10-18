@@ -28,6 +28,18 @@ describe('发布包版本检查', () => {
     expect(result.stderr).toContain(`根目录 package.json 不是有效的 SemVer 版本：${version}`);
   });
 
+  it.each(['1.2.3\n', '1.2.3\r', '1.2.3\u2028', '1.2.3\u2029'])(
+    '拒绝末尾带换行符的 SemVer 版本',
+    async (version) => {
+      const scriptPath = await prepareReleaseScript(rootDir, version);
+      const result = runReleasePreflight(rootDir, scriptPath, `v${version}`);
+
+      expect(result.error).toBeUndefined();
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toContain('根目录 package.json 不是有效的 SemVer 版本：');
+    },
+  );
+
   it('允许合法的零值数字预发布标识', async () => {
     const version = '1.2.3-0';
     const scriptPath = await prepareReleaseScript(rootDir, version);

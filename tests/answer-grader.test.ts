@@ -253,6 +253,19 @@ describe('OpenQuestionBank Core 答案评分', () => {
     ).toMatchObject({ isCorrect: false });
   });
 
+  it('拒绝末尾带换行符的数值作答', () => {
+    const question = findQuestion('numeric');
+    for (const lineTerminator of ['\n', '\r', '\u2028', '\u2029']) {
+      expect(
+        evaluateQuestionAnswer(question, {
+          type: 'numeric',
+          value: `12.5${lineTerminator}`,
+          unit: 'cm',
+        }),
+      ).toMatchObject({ isCorrect: false, earnedScore: 0 });
+    }
+  });
+
   it('简答题交由人工审核，题型不匹配时明确报错', () => {
     const question = findQuestion('short_answer');
 

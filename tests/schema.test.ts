@@ -1,7 +1,7 @@
 import { Ajv2020 } from 'ajv/dist/2020.js';
 import { describe, expect, it } from 'vitest';
 import { entitySchemaRefs, schemaDocument } from '../packages/schema/src/index.js';
-import { boundarySamples, invalidSamples, validSamples } from './fixtures.js';
+import { bank, boundarySamples, invalidSamples, questions, validSamples } from './fixtures.js';
 
 const ajv = new Ajv2020({ allErrors: true, strict: true });
 ajv.addSchema(schemaDocument);
@@ -52,5 +52,35 @@ describe('JSON Schema Draft 2020-12', () => {
       'questionGroup',
       'exam',
     ]);
+  });
+
+  it('rejects trailing line terminators in constrained strings', () => {
+    const validateBank = validatorFor(entitySchemaRefs.bank);
+    const validateQuestion = validatorFor(entitySchemaRefs.question);
+    const numericQuestion = questions.find((question) => question.type === 'numeric');
+    if (!numericQuestion) {
+      throw new Error('Missing numeric question fixture');
+    }
+
+    for (const lineTerminator of ['\n', '\r', '\u2028', '\u2029']) {
+      expect(validateBank({ ...bank, id: `${bank.id}${lineTerminator}` })).toBe(false);
+      expect(validateBank({ ...bank, version: `${bank.version}${lineTerminator}` })).toBe(false);
+      expect(validateBank({ ...bank, language: `${bank.language}${lineTerminator}` })).toBe(false);
+      expect(
+        validateBank({
+          ...bank,
+          paths: { ...bank.paths, topics: `${bank.paths.topics}${lineTerminator}` },
+        }),
+      ).toBe(false);
+      expect(
+        validateQuestion({
+          ...numericQuestion,
+          answer: {
+            ...numericQuestion.answer,
+            value: `${numericQuestion.answer.value}${lineTerminator}`,
+          },
+        }),
+      ).toBe(false);
+    }
   });
 });
