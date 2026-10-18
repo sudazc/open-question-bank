@@ -155,7 +155,7 @@ review:
   status: draft
 ```
 
-`type` 决定答案结构。V1.0 支持：`single_choice`、`multiple_choice`、`true_false`、`fill_blank`、`numeric` 和 `short_answer`。每道题都需要稳定 `id`、考点和知识引用、难度、来源及审核状态。填空题用 `{{blank-id}}` 标记题干中的空，并在答案中使用对应 ID。题型字段和答案示例见 [数据模型说明](docs/data-model.md)。
+`type` 决定答案结构。V1.0 支持：`single_choice`、`multiple_choice`、`true_false`、`fill_blank`、`numeric` 和 `short_answer`。每道题都需要稳定 `id`、题干、正确答案、难度、来源及审核状态。AI 建库时应至少关联一个考点或知识笔记；Schema 要求 `topicIds` 和 `knowledgeIds` 为数组，Core 会检查引用目标，但不会强制数组非空。填空题用 `{{blank-id}}` 标记题干中的空，并在答案中使用对应 ID。题型字段和答案示例见 [数据模型说明](docs/data-model.md) 和 [AI 构建指南](AI_GUIDE.md)。
 
 ### 添加知识笔记
 
