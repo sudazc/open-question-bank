@@ -10,7 +10,7 @@ export function parseHttpUrl(value: string): URL | undefined {
   }
 }
 
-const credentialQueryParameterNames = new Set(
+const credentialUrlParameterNames = new Set(
   [
     'access_token',
     'refresh_token',
@@ -60,7 +60,7 @@ const credentialQueryParameterNames = new Set(
 /** 检查 URL 是否包含可识别的访问凭据 */
 export function hasUrlCredentials(value: string): boolean {
   const normalized = value.trim();
-  if (hasCredentialQueryParameter(normalized)) {
+  if (hasCredentialUrlParameter(normalized)) {
     return true;
   }
   try {
@@ -75,16 +75,27 @@ export function hasUrlCredentials(value: string): boolean {
   return authority !== undefined && authority.lastIndexOf('@') > 0;
 }
 
-function hasCredentialQueryParameter(value: string): boolean {
-  const withoutFragment = value.split('#', 1)[0] ?? value;
-  const queryStart = withoutFragment.indexOf('?');
-  if (queryStart < 0) {
-    return false;
-  }
-  for (const [name, parameterValue] of new URLSearchParams(withoutFragment.slice(queryStart + 1))) {
+function hasCredentialUrlParameter(value: string): boolean {
+  const fragmentStart = value.indexOf('#');
+  const beforeFragment = fragmentStart < 0 ? value : value.slice(0, fragmentStart);
+  const fragment = fragmentStart < 0 ? undefined : value.slice(fragmentStart + 1);
+  const queryStart = beforeFragment.indexOf('?');
+  const query = queryStart < 0 ? '' : beforeFragment.slice(queryStart + 1);
+  const fragmentQueryStart = fragment?.lastIndexOf('?') ?? -1;
+  const fragmentParameters =
+    fragment === undefined
+      ? ''
+      : fragmentQueryStart < 0
+        ? fragment
+        : fragment.slice(fragmentQueryStart + 1);
+  return hasCredentialParameterList(query) || hasCredentialParameterList(fragmentParameters);
+}
+
+function hasCredentialParameterList(parameters: string): boolean {
+  for (const [name, parameterValue] of new URLSearchParams(parameters)) {
     if (
       parameterValue !== '' &&
-      credentialQueryParameterNames.has(normalizeQueryParameterName(name))
+      credentialUrlParameterNames.has(normalizeQueryParameterName(name))
     ) {
       return true;
     }

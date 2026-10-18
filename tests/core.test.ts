@@ -137,6 +137,7 @@ describe('OpenQuestionBank Core', () => {
     ['非 HTTP URL 中的凭据', 'ftp://user:secret@example.com/question'],
     ['访问令牌查询参数', 'https://example.com/question?access_token=secret'],
     ['API key 查询参数', 'https://example.com/question?key=secret'],
+    ['访问令牌片段参数', 'https://example.com/question#access_token=secret'],
     ['百分号编码参数名', 'https://example.com/question?access%5Ftoken=secret'],
     ['签名查询参数', 'https://example.com/question?X-Amz-Signature=secret'],
     ['格式错误 URL 中的令牌查询参数', 'https://example.com:invalid/question?token=secret'],
@@ -779,6 +780,7 @@ describe('OpenQuestionBank Core', () => {
     ['百分号编码用户名', '[凭据链接](https://user%40name:secret@example.com/private)'],
     ['格式错误 URL', '[凭据链接](https://user:secret@)'],
     ['访问令牌查询参数', '[凭据链接](https://example.com/private?access_token=secret)'],
+    ['访问令牌片段参数', '[凭据链接](https://example.com/private#access_token=secret)'],
     ['签名查询参数', 'https://example.com/private?X-Goog-Signature=secret'],
   ])('拒绝%s中的 URL 凭据且不回显凭据', async (_format, markdown) => {
     const note = knowledgeMarkdown('k-one', '', 'k-two').replace(
