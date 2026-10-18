@@ -297,6 +297,57 @@ describe('OpenQuestionBank CLI', () => {
     expect(existsSync(questionPage)).toBe(false);
   });
 
+  it('导出失败后保留旧清单并在重试时清理旧页面', async () => {
+    const bankDir = join(rootDir, 'bank');
+    const exportDir = join(rootDir, 'dist', 'obsidian');
+    const sourceQuestion = join(bankDir, 'questions', 'example.yaml');
+    const topicPage = join(exportDir, '考点', '基础知识.md');
+    const questionPage = join(
+      exportDir,
+      '题目',
+      'OpenQuestionBank 的源数据主要使用什么方式维护？.md',
+    );
+    await runCli(['init', bankDir], output);
+    const firstExitCode = await runCli(
+      ['export', bankDir, '--format', 'obsidian', '--out', exportDir],
+      output,
+    );
+    await rm(sourceQuestion);
+    await rm(topicPage);
+    await mkdir(topicPage);
+
+    const failedExitCode = await runCli(
+      ['export', bankDir, '--format', 'obsidian', '--out', exportDir],
+      output,
+    );
+    const manifestAfterFailure = JSON.parse(
+      await readFile(join(exportDir, 'manifest.json'), 'utf8'),
+    ) as {
+      files: Array<{ path: string }>;
+    };
+    await rm(topicPage, { recursive: true });
+    const retryExitCode = await runCli(
+      ['export', bankDir, '--format', 'obsidian', '--out', exportDir],
+      output,
+    );
+    const manifestAfterRetry = JSON.parse(
+      await readFile(join(exportDir, 'manifest.json'), 'utf8'),
+    ) as {
+      files: Array<{ path: string }>;
+    };
+
+    expect(firstExitCode).toBe(0);
+    expect(failedExitCode).toBe(2);
+    expect(manifestAfterFailure.files.map(({ path }) => path)).toContain(
+      '题目/OpenQuestionBank 的源数据主要使用什么方式维护？.md',
+    );
+    expect(retryExitCode).toBe(0);
+    expect(manifestAfterRetry.files.map(({ path }) => path)).not.toContain(
+      '题目/OpenQuestionBank 的源数据主要使用什么方式维护？.md',
+    );
+    expect(existsSync(questionPage)).toBe(false);
+  });
+
   it('重新导出时保留用户修改过的旧页面和未登记文件', async () => {
     const bankDir = join(rootDir, 'bank');
     const exportDir = join(rootDir, 'dist', 'obsidian');

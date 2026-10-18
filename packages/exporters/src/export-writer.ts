@@ -205,6 +205,30 @@ export async function writeExportFiles(
   }
 }
 
+/** 写入导出文件并在旧文件清理完成后发布新清单 */
+export async function writeManagedExportFiles(
+  outputRoot: string,
+  files: readonly ExportFile[],
+  previousFiles: readonly PreviousExportFile[],
+  currentPaths: readonly string[],
+): Promise<void> {
+  const manifestFiles = files.filter(({ path }) => path === 'manifest.json');
+  if (manifestFiles.length !== 1) {
+    throw new Error('导出包必须且只能包含一个 manifest.json');
+  }
+  const [manifestFile] = manifestFiles;
+  if (!manifestFile) {
+    throw new Error('导出包缺少 manifest.json');
+  }
+
+  await writeExportFiles(
+    outputRoot,
+    files.filter(({ path }) => path !== 'manifest.json'),
+  );
+  await removeStaleExportFiles(outputRoot, previousFiles, currentPaths);
+  await writeExportFiles(outputRoot, [manifestFile]);
+}
+
 /** 读取上一版 OpenQuestionBank 导出清单中的文件记录 */
 export async function readPreviousExportFiles(outputRoot: string): Promise<PreviousExportFile[]> {
   const manifestPath = join(outputRoot, 'manifest.json');

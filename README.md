@@ -240,7 +240,7 @@ pnpm oqb build ./my-question-bank --seed practice-001 --format notion --out ./di
 pnpm oqb export ../my-question-bank --format json --out ./dist/my-question-bank
 ```
 
-导出包包含完整的 Bank、Topic、Knowledge、Question、QuestionGroup 和 Exam 数据，并保留 Markdown 正文、稳定 ID、资源相对路径及实体引用；题库引用到的资源文件也会按原路径复制。实体集合按 ID 稳定排序，导出的 `manifest.json` 提供题库版本、实体统计、JSON 和资源文件的大小及 SHA-256，便于自动化检查和后续导入。校验失败时不会生成文件；警告会显示，但不会单独阻止导出。重复导出会更新当前仍生成的文件；本次不再生成且与上一份清单校验值一致的旧文件会移除，用户修改过的旧文件和清单未登记文件会保留。
+导出包包含完整的 Bank、Topic、Knowledge、Question、QuestionGroup 和 Exam 数据，并保留 Markdown 正文、稳定 ID、资源相对路径及实体引用；题库引用到的资源文件也会按原路径复制。实体集合按 ID 稳定排序，导出的 `manifest.json` 提供题库版本、实体统计、JSON 和资源文件的大小及 SHA-256，便于自动化检查和后续导入。校验失败时不会生成文件；警告会显示，但不会单独阻止导出。重复导出会更新当前仍生成的文件；本次不再生成且与上一份清单校验值一致的旧文件会移除，用户修改过的旧文件和清单未登记文件会保留。导出中途失败时会保留上一版清单；修复目标路径问题后重新运行导出，可继续清理旧页面并生成完整的新清单。
 
 导出格式字段、目录结构和可复现规则见 [标准 JSON 导出说明](docs/export-json.md)。
 

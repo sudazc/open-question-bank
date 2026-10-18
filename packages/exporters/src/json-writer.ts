@@ -4,8 +4,7 @@ import {
   copyExportAssets,
   prepareExportDirectory,
   readPreviousExportFiles,
-  removeStaleExportFiles,
-  writeExportFiles,
+  writeManagedExportFiles,
   type ExportWriterOptions,
 } from './export-writer.js';
 import { createQuestionBankJsonExport } from './json.js';
@@ -44,8 +43,7 @@ export async function writeQuestionBankJsonExport(
   const previousFiles = await readPreviousExportFiles(targetDirectory);
   const assets = await copyExportAssets(assetSources, targetDirectory);
   const exported = createQuestionBankJsonExport(data, assets);
-  await writeExportFiles(targetDirectory, exported.files);
-  await removeStaleExportFiles(targetDirectory, previousFiles, [
+  await writeManagedExportFiles(targetDirectory, exported.files, previousFiles, [
     ...exported.files.map(({ path }) => path),
     ...assetSources.map(({ path }) => path),
   ]);
