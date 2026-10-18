@@ -19,7 +19,7 @@ Markdown 知识文件的 YAML Front Matter 存放 `Knowledge` 元数据，正文
 
 - ID 为 1–128 个 ASCII 字符，以字母或数字开头，之后只能使用字母、数字、点、下划线、冒号和连字符。ID 不含路径，实体关系按实体类型和 ID 定位。
 - `Bank.version` 使用完整 SemVer；`schemaVersion` 对应数据合同版本，目前固定为 `1.0.0`。
-- `Bank.paths` 中的考点、知识、题目、题组、试卷和资源目录必须互不相同且互不嵌套；Core 按大小写不敏感、Unicode NFC 归一化，以及 Windows 会忽略目录段末尾点和空格的规则比较，避免递归扫描时跨类型读取同一文件或在不同文件系统上发生路径碰撞。
+- `Bank.paths` 使用题库根目录下的正斜杠相对路径，各目录段需满足跨平台文件系统规则；Core 拒绝 Windows 非法字符、控制字符、末尾点或空格、保留设备名和超过 255 个 UTF-8 字节的目录段。各类目录必须互不相同且互不嵌套；Core 按大小写不敏感和 Unicode NFC 归一化比较，避免递归扫描时跨类型读取同一文件或在不同文件系统上发生路径碰撞。
 - 每个 `Question` 和 `Knowledge` 都要求 `source` 与 `review`。`QuestionGroup` 也要求这两个字段。来源和审核状态使用 Schema 中列出的枚举。
 - `official_public` 只描述来源类型，不表示取得转载或再发布许可。授权判断属于发布校验。
 - `source.url` 是可选字符串。非原创来源缺少链接或链接不是有效 HTTP / HTTPS 地址时会收到警告；URL 不得包含用户名 / 密码或常见访问凭据查询 / 片段参数，否则 Core 会以 `OQB-SOURCE-003` 错误阻止导出。Core 不联网验证链接可访问性或页面内容。

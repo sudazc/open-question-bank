@@ -59,14 +59,14 @@ describe('OpenQuestionBank Core', () => {
   });
 
   it.each([
-    ['相同目录', 'shared', 'shared'],
-    ['互相嵌套的目录', 'shared', 'shared/questions'],
-    ['仅大小写不同的目录', 'shared', 'SHARED'],
-    ['Unicode NFC 归一化后相同的目录', 'caf\u00e9', 'cafe\u0301'],
-    ['Windows 忽略末尾点后相同的目录段', 'shared./topics', 'shared/topics'],
-    ['Windows 忽略末尾空格后相同的目录段', 'shared /topics', 'shared/topics'],
-    ['实体目录与资源目录嵌套', 'assets', 'questions'],
-  ])('拒绝配置为%s的题库路径', async (_description, topicsPath, questionsPath) => {
+    ['相同目录', 'shared', 'shared', 'OQB-FILE-021'],
+    ['互相嵌套的目录', 'shared', 'shared/questions', 'OQB-FILE-021'],
+    ['仅大小写不同的目录', 'shared', 'SHARED', 'OQB-FILE-021'],
+    ['Unicode NFC 归一化后相同的目录', 'caf\u00e9', 'cafe\u0301', 'OQB-FILE-021'],
+    ['Windows 末尾点目录段', 'shared./topics', 'shared/topics', 'OQB-FILE-003'],
+    ['Windows 末尾空格目录段', 'shared /topics', 'shared/topics', 'OQB-FILE-003'],
+    ['实体目录与资源目录嵌套', 'assets', 'questions', 'OQB-FILE-021'],
+  ])('拒绝配置为%s的题库路径', async (_description, topicsPath, questionsPath, code) => {
     const questionsDirectory = join(rootDir, questionsPath);
     await mkdir(questionsDirectory, { recursive: true });
     await writeFile(join(questionsDirectory, 'question.yaml'), questionYaml('q-one', 'k-one'));
@@ -85,13 +85,42 @@ describe('OpenQuestionBank Core', () => {
     expect(result.valid).toBe(false);
     expect(result.diagnostics).toContainEqual(
       expect.objectContaining({
-        code: 'OQB-FILE-021',
+        code,
         severity: 'error',
         file: 'bank.yaml',
         fieldPath: 'paths.topics',
       }),
     );
+    expect(
+      result.diagnostics.some(({ code: diagnosticCode }) => diagnosticCode === 'OQB-REF-001'),
+    ).toBe(false);
     expect(result.diagnostics.some(({ code }) => code.startsWith('OQB-SCHEMA-'))).toBe(false);
+  });
+
+  it.each([
+    ['Windows 非法字符', 'topic?bank'],
+    ['Windows 保留设备名', 'CON'],
+    ['Windows 末尾点', 'topics.'],
+    ['Windows 末尾空格', '"topics "'],
+    ['控制字符', '"topic\\u0001bank"'],
+    ['超过 255 字节的目录段', 'é'.repeat(128)],
+  ])('拒绝不可移植的 Bank.paths 目录段：%s', async (_description, topicsPath) => {
+    const bankPath = join(rootDir, 'bank.yaml');
+    const bankContents = await readFile(bankPath, 'utf8');
+    await writeFile(bankPath, bankContents.replace('  topics: topics', `  topics: ${topicsPath}`));
+
+    const result = await validateQuestionBankDirectory(rootDir);
+
+    expect(result.valid).toBe(false);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'OQB-FILE-003',
+        severity: 'error',
+        file: 'bank.yaml',
+        fieldPath: 'paths.topics',
+      }),
+    );
+    expect(result.diagnostics.some(({ code }) => code === 'OQB-REF-001')).toBe(false);
   });
 
   it.each([

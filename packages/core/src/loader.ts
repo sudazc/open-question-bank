@@ -197,14 +197,7 @@ export async function loadQuestionBank(
     const relativeDirectory = collections[collection];
     const directoryPath = resolveBankRelativePath(absoluteRoot, relativeDirectory);
     if (!directoryPath) {
-      result.diagnostics.push({
-        code: 'OQB-FILE-003',
-        severity: 'error',
-        message: `目录路径不安全：${relativeDirectory}`,
-        file: bankFile,
-        fieldPath: `paths.${collection}`,
-        suggestion: '使用题库根目录下不含绝对路径、点路径或 Windows 保留分隔符的相对路径',
-      });
+      result.diagnostics.push(createInvalidBankPathDiagnostic(collection, relativeDirectory));
       continue;
     }
 
@@ -419,6 +412,7 @@ function validateBankDirectoryPaths(
 
   for (const configuredPath of configuredPaths) {
     if (!resolveBankRelativePath(rootDir, configuredPath.value)) {
+      diagnostics.push(createInvalidBankPathDiagnostic(configuredPath.name, configuredPath.value));
       continue;
     }
 
@@ -452,18 +446,27 @@ function validateBankDirectoryPaths(
   return diagnostics;
 }
 
+function createInvalidBankPathDiagnostic(name: string, path: string): Diagnostic {
+  const isAssetsPath = name === 'assets';
+  return {
+    code: 'OQB-FILE-003',
+    severity: 'error',
+    message: `${isAssetsPath ? '资源目录' : '目录'}路径不安全或不可跨平台使用：${path}`,
+    file: bankFilename,
+    fieldPath: `paths.${name}`,
+    suggestion: isAssetsPath
+      ? '将资源目录设置为题库根目录下符合跨平台文件系统规则的相对路径'
+      : '使用题库根目录下的相对路径，并确保每段名称符合跨平台文件系统规则',
+  };
+}
+
 function normalizeBankDirectorySegments(relativePath: string): string[] {
   const segments = relativePath.split('/');
   if (segments.at(-1) === '') {
     segments.pop();
   }
   return segments
-    .map((segment) =>
-      segment
-        .normalize('NFC')
-        .replace(/[ .]+$/u, '')
-        .toLowerCase(),
-    )
+    .map((segment) => segment.normalize('NFC').toLowerCase())
     .filter((segment) => segment.length > 0);
 }
 
@@ -480,14 +483,7 @@ async function validateAssetsDirectory(
 ): Promise<void> {
   const directoryPath = resolveBankRelativePath(rootDir, relativeDirectory);
   if (!directoryPath) {
-    diagnostics.push({
-      code: 'OQB-FILE-003',
-      severity: 'error',
-      message: `资源目录路径不安全：${relativeDirectory}`,
-      file: bankFilename,
-      fieldPath: 'paths.assets',
-      suggestion: '将资源目录设置为题库根目录下的相对路径',
-    });
+    diagnostics.push(createInvalidBankPathDiagnostic('assets', relativeDirectory));
     return;
   }
   try {
@@ -721,12 +717,33 @@ function resolveBankRelativePath(rootDir: string, relativePath: string): string 
     isAbsolute(relativePath) ||
     win32.isAbsolute(relativePath) ||
     segments.length === 0 ||
-    segments.some((segment) => segment === '' || segment === '.' || segment === '..')
+    segments.some(
+      (segment) =>
+        segment === '' ||
+        segment === '.' ||
+        segment === '..' ||
+        !isPortableBankDirectorySegment(segment),
+    )
   ) {
     return undefined;
   }
   const candidate = resolve(rootDir, ...segments);
   return isContained(rootDir, candidate) ? candidate : undefined;
+}
+
+function isPortableBankDirectorySegment(segment: string): boolean {
+  if (
+    segment.endsWith('.') ||
+    segment.endsWith(' ') ||
+    Buffer.byteLength(segment, 'utf8') > 255 ||
+    /[<>:"|?*]/u.test(segment) ||
+    [...segment].some((character) => (character.codePointAt(0) ?? 0) < 0x20)
+  ) {
+    return false;
+  }
+
+  const baseName = segment.split('.')[0]?.replace(/[ .]+$/u, '') ?? '';
+  return !/^(?:con|prn|aux|nul|conin\$|conout\$|com[1-9¹²³]|lpt[1-9¹²³])$/iu.test(baseName);
 }
 
 async function findSymbolicLinkPath(
