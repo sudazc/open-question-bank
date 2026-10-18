@@ -428,6 +428,14 @@ function validateExamReferences(
 ): void {
   const questionValues = [...questions.values()].map(({ value }) => value);
   const groupValues = [...groups.values()].map(({ value }) => value);
+  const groupIdByQuestionId = new Map<string, string>();
+  for (const group of groupValues) {
+    for (const questionId of group.questionIds) {
+      if (!groupIdByQuestionId.has(questionId)) {
+        groupIdByQuestionId.set(questionId, group.id);
+      }
+    }
+  }
   for (const exam of exams.values()) {
     const value = exam.value;
     if ('items' in value) {
@@ -458,6 +466,7 @@ function validateExamReferences(
           itemIndex,
           questions,
           groups,
+          groupIdByQuestionId,
           seenQuestions,
           seenGroups,
           diagnostics,
@@ -476,6 +485,24 @@ function validateExamReferences(
         rule.unit === 'question' ? '题目' : '题组',
         diagnostics,
       );
+      if (rule.unit === 'question') {
+        const groupedQuestionCount = matchingCandidates.filter(
+          (candidate) =>
+            candidate.unit === 'question' && groupIdByQuestionId.has(candidate.question.id),
+        ).length;
+        if (groupedQuestionCount > 0) {
+          diagnostics.push({
+            code: 'OQB-GROUP-004',
+            severity: 'warning',
+            message: `第 ${ruleIndex + 1} 条单题规则可能抽取 ${groupedQuestionCount} 道材料题组子题，普通题目项不会携带共享材料`,
+            file: exam.file,
+            entityId: value.id,
+            fieldPath: `rules[${ruleIndex}]`,
+            suggestion:
+              '确认题干可以独立作答；需要共享材料时，使用题组规则并确保整组子题满足筛选条件',
+          });
+        }
+      }
     });
   }
 }
@@ -486,6 +513,7 @@ function validateExamItem(
   itemIndex: number,
   questions: EntityMap<Question>,
   groups: EntityMap<QuestionGroup>,
+  groupIdByQuestionId: ReadonlyMap<string, string>,
   seenQuestions: Set<string>,
   seenGroups: Set<string>,
   diagnostics: Diagnostic[],
@@ -501,6 +529,20 @@ function validateExamItem(
       '试卷题目',
       diagnostics,
     );
+    const groupId = questions.has(item.questionId)
+      ? groupIdByQuestionId.get(item.questionId)
+      : undefined;
+    if (groupId) {
+      diagnostics.push({
+        code: 'OQB-GROUP-004',
+        severity: 'warning',
+        message: `题目 ${item.questionId} 属于材料题组 ${groupId}，作为普通题目项时不会携带共享材料`,
+        file: exam.file,
+        entityId: exam.value.id,
+        fieldPath: `${field}.questionId`,
+        suggestion: '确认题干可以独立作答；需要共享材料时，将题目放入完整题组项',
+      });
+    }
     if (seenQuestions.has(item.questionId)) {
       addDiagnostic(
         diagnostics,

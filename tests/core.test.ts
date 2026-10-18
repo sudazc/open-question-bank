@@ -795,6 +795,73 @@ describe('OpenQuestionBank Core', () => {
     expect(codes).toContain('OQB-EXAM-003');
   });
 
+  it('提醒试卷、生成结果和单题规则可能省略材料题组共享材料', async () => {
+    await writeFile(
+      join(rootDir, 'exams/fixed.yaml'),
+      [
+        'id: exam-fixed',
+        'title: 固定试卷',
+        'mode: fixed',
+        'items:',
+        '  - kind: question',
+        '    questionId: q-one',
+        '    score: 1',
+      ].join('\n'),
+    );
+    await writeFile(
+      join(rootDir, 'exams/generated-template.yaml'),
+      [
+        'id: exam-generated-template',
+        'title: 规则组卷',
+        'mode: generated',
+        'kind: template',
+        'rules:',
+        '  - unit: question',
+        '    count: 2',
+        '    scorePerQuestion: 1',
+      ].join('\n'),
+    );
+    await writeFile(
+      join(rootDir, 'exams/generated-result.yaml'),
+      [
+        'id: exam-generated-result',
+        'title: 已生成试卷',
+        'mode: generated',
+        'kind: result',
+        'items:',
+        '  - kind: question',
+        '    questionId: q-two',
+        '    score: 1',
+        'randomSeed: group-member',
+        'bankVersion: "1.0.0"',
+        'algorithmVersion: "1.2.0"',
+      ].join('\n'),
+    );
+
+    const result = await validateQuestionBankDirectory(rootDir);
+    const diagnostics = result.diagnostics.filter(({ code }) => code === 'OQB-GROUP-004');
+
+    expect(result.valid).toBe(true);
+    expect(diagnostics).toHaveLength(3);
+    expect(diagnostics.every(({ severity }) => severity === 'warning')).toBe(true);
+    expect(diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          entityId: 'exam-fixed',
+          fieldPath: 'items[0].questionId',
+        }),
+        expect.objectContaining({
+          entityId: 'exam-generated-template',
+          fieldPath: 'rules[0]',
+        }),
+        expect.objectContaining({
+          entityId: 'exam-generated-result',
+          fieldPath: 'items[0].questionId',
+        }),
+      ]),
+    );
+  });
+
   it('提示已生成试卷的题库版本与当前版本不一致，但不阻止校验', async () => {
     for (const { id, version } of [
       { id: 'exam-result-current', version: '1.0.0' },
