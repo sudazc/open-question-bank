@@ -5,7 +5,7 @@ import {
   normalizeExportAssets,
   type ExportAsset,
 } from './export-common.js';
-import { escapeMarkdownHeading } from './markdown-utils.js';
+import { escapeMarkdownHeading, escapeMarkdownText } from './markdown-utils.js';
 import {
   createQuestionBankGithubMarkdownExport,
   findQuestionAnswerSection,
@@ -435,18 +435,14 @@ function prepareNotionQuestionPage(
     /^# .+$/m,
     () => '# ' + escapeMarkdownHeading(questionTitle(question.stem)),
   );
-  const identityLine = /^> (稳定 ID：.*?)(?: · (.*))?$/m.exec(result);
-  if (identityLine?.[2]) {
-    const details = identityLine[2].split(' · ');
-    details[0] = questionTypeLabels[question.type];
-    if (details[1]) {
-      details[1] = '难度：' + details[1];
-    }
-    if (details.length > 2) {
-      details[2] = '分值：' + details.slice(2).join(' · ');
-      details.length = 3;
-    }
-    result = result.replace(identityLine[0], '> ' + identityLine[1] + ' · ' + details.join(' · '));
+  const identityLine = /^> (稳定 ID：.*?)(?: · .*)?$/m.exec(result);
+  if (identityLine) {
+    const details = [
+      questionTypeLabels[question.type],
+      '难度：' + escapeMarkdownText(question.difficulty),
+      '分值：' + escapeMarkdownText(String(question.score)) + ' 分',
+    ];
+    result = result.replace(identityLine[0], identityLine[1] + ' · ' + details.join(' · '));
   }
 
   const optionsHeading = '\n## 选项\n';
