@@ -443,7 +443,14 @@ function normalizeBankDirectorySegments(relativePath: string): string[] {
   if (segments.at(-1) === '') {
     segments.pop();
   }
-  return segments.map((segment) => segment.normalize('NFC').toLowerCase());
+  return segments
+    .map((segment) =>
+      segment
+        .normalize('NFC')
+        .replace(/[ .]+$/u, '')
+        .toLowerCase(),
+    )
+    .filter((segment) => segment.length > 0);
 }
 
 function areOverlappingBankDirectories(left: readonly string[], right: readonly string[]): boolean {
