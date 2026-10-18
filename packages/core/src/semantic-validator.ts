@@ -8,7 +8,11 @@ import type {
 } from '@openquestionbank/schema';
 import { decodeMarkdownBackslashEscapes, maskMarkdownCode } from './asset-validator.js';
 import type { Diagnostic } from './diagnostics.js';
-import { getExamRuleCandidates } from './exam-rules.js';
+import {
+  estimateExamRuleEvaluationWork,
+  getExamRuleCandidates,
+  maximumExamRuleEvaluationWork,
+} from './exam-rules.js';
 import { decodeHtmlCharacterReferences } from './html-entities.js';
 import type { LocatedEntity, LocatedQuestionBank } from './types.js';
 import { hasUrlCredentials, parseHttpUrl } from './url-security.js';
@@ -436,6 +440,8 @@ function validateExamReferences(
       }
     }
   }
+  let remainingRuleEvaluationWork = maximumExamRuleEvaluationWork;
+  let examWorkLimitReported = false;
   for (const exam of exams.values()) {
     const value = exam.value;
     if ('items' in value) {
@@ -474,6 +480,30 @@ function validateExamReferences(
       });
       continue;
     }
+
+    const examWork = estimateExamRuleEvaluationWork(
+      value.rules,
+      questionValues,
+      groupValues,
+      remainingRuleEvaluationWork,
+    );
+    if (examWork === undefined) {
+      if (!examWorkLimitReported) {
+        diagnostics.push({
+          code: 'OQB-EXAM-004',
+          severity: 'error',
+          message: `题库规则组卷候选检查量超过安全上限 ${maximumExamRuleEvaluationWork} 个工作单位`,
+          file: exam.file,
+          entityId: value.id,
+          fieldPath: 'rules',
+          suggestion: '减少规则数量或候选规模；需要拆分时，放入多个独立题库分别校验',
+        });
+        examWorkLimitReported = true;
+      }
+      remainingRuleEvaluationWork = 0;
+      continue;
+    }
+    remainingRuleEvaluationWork -= examWork;
 
     value.rules.forEach((rule, ruleIndex) => {
       const matchingCandidates = getExamRuleCandidates(rule, questionValues, groupValues);

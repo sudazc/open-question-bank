@@ -230,7 +230,7 @@ pnpm oqb build ./my-question-bank --seed practice-001 --format obsidian --out ./
 pnpm oqb build ./my-question-bank --seed practice-001 --format notion --out ./dist/notion-practice-001
 ```
 
-`--format` 默认为 `json`，也可选择 `github-markdown`、`obsidian` 或 `notion`。没有规则组卷模板时，`--seed` 可省略。规则之间不会重复抽取题目；题组作为整体抽取，并按模板分值为每道子题设置分数。若候选重叠，组卷器会回溯搜索可行组合；搜索超过 100,000 个候选组合时会返回 `SEARCH_LIMIT_REACHED`，此时需要收窄筛选条件或拆分试卷模板。
+`--format` 默认为 `json`，也可选择 `github-markdown`、`obsidian` 或 `notion`。没有规则组卷模板时，`--seed` 可省略。规则之间不会重复抽取题目；题组作为整体抽取，并按模板分值为每道子题设置分数。若候选重叠，组卷器会回溯搜索可行组合；组合数超过 100,000 或搜索候选检查工作量超过 5,000,000 个工作单位时，会返回 `SEARCH_LIMIT_REACHED`。一次题库校验中，所有规则组卷模板共享 1,000,000 个候选检查工作单位预算；超出后校验会报错。直接调用 Core 的 `generateExam` 时，则按单个模板计算此预算。可减少规则数量、缩小候选范围；若需分别处理大量模板，可拆成多个独立题库。
 
 ### 导出标准 JSON
 

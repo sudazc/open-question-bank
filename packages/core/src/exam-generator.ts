@@ -5,12 +5,18 @@ import type {
   GeneratedExamTemplate,
   SelectionRule,
 } from '@openquestionbank/schema';
-import { getExamRuleCandidates, type ExamRuleCandidate } from './exam-rules.js';
+import {
+  estimateExamRuleEvaluationWork,
+  getExamRuleCandidates,
+  maximumExamRuleEvaluationWork,
+  type ExamRuleCandidate,
+} from './exam-rules.js';
 import type { QuestionBankData } from './types.js';
 
 export const examGenerationAlgorithmVersion = '1.2.0' as const;
 
 const maximumExamSearchCombinations = 100_000;
+const maximumExamSearchWork = 5_000_000;
 
 interface PlannedRule {
   rule: SelectionRule;
@@ -40,7 +46,8 @@ export type ExamGenerationErrorCode =
   | 'EXAM_NOT_TEMPLATE'
   | 'INVALID_RANDOM_SEED'
   | 'INSUFFICIENT_CANDIDATES'
-  | 'SEARCH_LIMIT_REACHED';
+  | 'SEARCH_LIMIT_REACHED'
+  | 'RULE_WORK_LIMIT_REACHED';
 
 export class ExamGenerationError extends Error {
   constructor(
@@ -75,11 +82,27 @@ export function generateExam(
   if (!isGeneratedExamTemplate(exam)) {
     throw new ExamGenerationError('EXAM_NOT_TEMPLATE', `试卷 ${templateId} 不是规则组卷模板`);
   }
+  if (estimateExamRuleEvaluationWork(exam.rules, data.questions, data.groups) === undefined) {
+    throw new ExamGenerationError(
+      'RULE_WORK_LIMIT_REACHED',
+      `规则组卷候选检查量超过安全上限 ${maximumExamRuleEvaluationWork} 个工作单位`,
+    );
+  }
 
   const randomIndex = createRandomIndex(randomSeed);
   const selectedQuestionIds = new Set<string>();
   const selectedGroupIds = new Set<string>();
   const itemsByRule: ExamItem[][] = exam.rules.map(() => []);
+  let searchWork = 0;
+  const consumeSearchWork = (work: number): void => {
+    if (work > maximumExamSearchWork - searchWork) {
+      throw new ExamGenerationError(
+        'SEARCH_LIMIT_REACHED',
+        `组卷搜索候选检查工作量超过 ${maximumExamSearchWork} 个工作单位，未能确认规则组合是否可行；请缩小规则范围或拆分试卷模板`,
+      );
+    }
+    searchWork += work;
+  };
   const plannedRules: PlannedRule[] = exam.rules
     .map((rule, ruleIndex) => ({
       rule,
@@ -112,9 +135,13 @@ export function generateExam(
       return undefined;
     }
 
-    const candidates = plannedRule.candidates.filter((candidate) =>
-      isCandidateAvailable(candidate, selectedQuestionIds, selectedGroupIds),
-    );
+    const candidates: ExamRuleCandidate[] = [];
+    for (const candidate of plannedRule.candidates) {
+      consumeSearchWork(1 + candidateQuestionCount(candidate));
+      if (isCandidateAvailable(candidate, selectedQuestionIds, selectedGroupIds)) {
+        candidates.push(candidate);
+      }
+    }
     if (candidates.length < plannedRule.rule.count) {
       recordFailure({
         position,
@@ -125,6 +152,7 @@ export function generateExam(
       return undefined;
     }
 
+    consumeSearchWork(plannedRule.rule.count);
     return {
       position,
       rule: plannedRule.rule,
@@ -152,6 +180,7 @@ export function generateExam(
     }
 
     if (frame.selected) {
+      consumeSearchWork(candidateSelectionWork(frame.selected, 2));
       for (const candidate of frame.selected) {
         unselectCandidate(candidate, selectedQuestionIds, selectedGroupIds);
       }
@@ -172,6 +201,7 @@ export function generateExam(
     }
 
     const selection: ExamRuleCandidate[] = [];
+    consumeSearchWork(frame.combinationIndices.length);
     for (const index of frame.combinationIndices) {
       const candidate = frame.candidates[index];
       if (!candidate) {
@@ -180,6 +210,7 @@ export function generateExam(
       selection.push(candidate);
     }
 
+    consumeSearchWork(candidateSelectionWork(selection, 3));
     if (!canSelectCandidates(selection, selectedQuestionIds, selectedGroupIds)) {
       recordFailure({
         position: frame.position,
@@ -193,10 +224,12 @@ export function generateExam(
       continue;
     }
 
+    consumeSearchWork(candidateSelectionWork(selection, 2));
     for (const candidate of selection) {
       selectCandidate(candidate, selectedQuestionIds, selectedGroupIds);
     }
     frame.selected = selection;
+    consumeSearchWork(candidateSelectionWork(selection, 2));
     itemsByRule[frame.ruleIndex] = selection.map((candidate) =>
       createExamItem(candidate, frame.rule),
     );
@@ -261,6 +294,21 @@ function isCandidateAvailable(
     !selectedGroupIds.has(candidate.group.id) &&
     candidate.questions.every(({ id }) => !selectedQuestionIds.has(id))
   );
+}
+
+function candidateQuestionCount(candidate: ExamRuleCandidate): number {
+  return candidate.unit === 'group' ? candidate.questions.length : 0;
+}
+
+function candidateSelectionWork(
+  candidates: readonly ExamRuleCandidate[],
+  questionPasses: number,
+): number {
+  let work = candidates.length;
+  for (const candidate of candidates) {
+    work += candidateQuestionCount(candidate) * questionPasses;
+  }
+  return work;
 }
 
 function canSelectCandidates(

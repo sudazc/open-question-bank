@@ -1832,6 +1832,69 @@ describe('OpenQuestionBank Core', () => {
     expect(result.algorithmVersion).toBe('1.2.0');
   });
 
+  it('按题库累计候选工作量并限制直接组卷', async () => {
+    const base = await validateQuestionBankDirectory(rootDir);
+    const bank = base.data.bank;
+    const sampleQuestion = base.data.questions[0];
+    if (!bank || !sampleQuestion) {
+      throw new Error('基础题库缺少 Bank 或示例题目');
+    }
+    const questions: Question[] = Array.from({ length: 1_001 }, (_, index) => ({
+      ...sampleQuestion,
+      id: `q-budget-${index}`,
+      stem: `${sampleQuestion.stem} ${index}`,
+    }));
+    const createTemplate = (id: string, ruleCount: number): Exam => ({
+      id,
+      title: '候选工作量上限',
+      mode: 'generated',
+      kind: 'template',
+      rules: Array.from({ length: ruleCount }, () => ({
+        unit: 'question',
+        count: 1,
+        scorePerQuestion: 1,
+      })),
+    });
+    const templates = [
+      createTemplate('exam-work-limit-a', 500),
+      createTemplate('exam-work-limit-b', 500),
+      createTemplate('exam-work-limit-direct', 1_000),
+    ];
+    const fixedExam: Exam = {
+      id: 'exam-fixed-after-work-limit',
+      title: '预算耗尽后的固定试卷',
+      mode: 'fixed',
+      items: [{ kind: 'question', questionId: 'missing-question', score: 1 }],
+    };
+    const result = validateQuestionBank({
+      rootDir,
+      bank: { file: 'bank.yaml', value: bank },
+      topics: base.data.topics.map((value) => ({ file: `topics/${value.id}.yaml`, value })),
+      knowledge: base.data.knowledge.map((value) => ({ file: `knowledge/${value.id}.md`, value })),
+      questions: questions.map((value) => ({ file: `questions/${value.id}.yaml`, value })),
+      groups: [],
+      exams: [
+        ...templates.map((value) => ({ file: `exams/${value.id}.yaml`, value })),
+        { file: 'exams/exam-fixed-after-work-limit.yaml', value: fixedExam },
+      ],
+      diagnostics: [],
+    });
+
+    expect(result.valid).toBe(false);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({ code: 'OQB-EXAM-004', entityId: 'exam-work-limit-b' }),
+    );
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'OQB-REF-001',
+        entityId: 'exam-fixed-after-work-limit',
+      }),
+    );
+    expect(() => generateExam(result.data, 'exam-work-limit-direct', 'budget-seed')).toThrow(
+      expect.objectContaining({ code: 'RULE_WORK_LIMIT_REACHED' }),
+    );
+  });
+
   it('超出候选组合搜索上限时明确报告搜索未完成', async () => {
     const topicIds = ['topic-first-rule', 'topic-second-rule', 'topic-shared'];
     for (const id of topicIds) {
@@ -1885,6 +1948,43 @@ describe('OpenQuestionBank Core', () => {
     expect(validated.valid).toBe(true);
     expect(() => generateExam(validated.data, 'exam-search-limit', 'search-limit-seed')).toThrow(
       expect.objectContaining({ code: 'SEARCH_LIMIT_REACHED' }),
+    );
+  });
+
+  it('限制大候选集回溯时重复扫描的工作量', async () => {
+    const base = await validateQuestionBankDirectory(rootDir);
+    const sampleQuestion = base.data.questions[0];
+    if (!sampleQuestion) {
+      throw new Error('基础题库缺少示例题目');
+    }
+    const questions: Question[] = Array.from({ length: 1_200 }, (_, index) => ({
+      ...sampleQuestion,
+      id: `q-search-work-${index}`,
+      stem: `${sampleQuestion.stem} ${index}`,
+    }));
+    const exam: Exam = {
+      id: 'exam-search-work-limit',
+      title: '回溯工作量上限',
+      mode: 'generated',
+      kind: 'template',
+      rules: Array.from({ length: 2 }, () => ({
+        unit: 'question',
+        count: 601,
+        scorePerQuestion: 1,
+      })),
+    };
+
+    expect(() =>
+      generateExam(
+        { ...base.data, questions, exams: [...base.data.exams, exam] },
+        exam.id,
+        'search-work-limit-seed',
+      ),
+    ).toThrow(
+      expect.objectContaining({
+        code: 'SEARCH_LIMIT_REACHED',
+        message: expect.stringContaining('工作量'),
+      }),
     );
   });
 
