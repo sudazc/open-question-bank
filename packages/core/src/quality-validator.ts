@@ -188,6 +188,17 @@ function collectRequiredTextFields(
         addField(fields, question, `answer.rubric[${index}].description`, criterion.description);
       });
     }
+    if (question.value.type === 'numeric') {
+      if (
+        question.value.answer.unit !== undefined &&
+        question.value.unitRule?.mode !== 'required'
+      ) {
+        addField(fields, question, 'answer.unit', question.value.answer.unit);
+      }
+      question.value.unitRule?.acceptedUnits?.forEach((unit, index) => {
+        addField(fields, question, `unitRule.acceptedUnits[${index}]`, unit);
+      });
+    }
   }
   for (const group of bank.groups) {
     addField(fields, group, 'title', group.value.title);

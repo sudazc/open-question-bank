@@ -274,7 +274,7 @@ function validateQuestionReferences(
         diagnostics,
       );
     } else if (value.type === 'numeric' && value.unitRule?.mode === 'required') {
-      if (!value.answer.unit) {
+      if (!value.answer.unit || value.answer.unit.trim().length === 0) {
         addDiagnostic(
           diagnostics,
           question.file,

@@ -387,6 +387,27 @@ describe('OpenQuestionBank Core', () => {
         answer: { value: '1', unit: 'm' },
         unitRule: { mode: 'required', acceptedUnits: ['cm'] },
       },
+      {
+        ...sharedFields,
+        id: 'q-unit-whitespace',
+        type: 'numeric',
+        answer: { value: '1', unit: '   ' },
+        unitRule: { mode: 'required' },
+      },
+      {
+        ...sharedFields,
+        id: 'q-unit-alias-whitespace',
+        type: 'numeric',
+        answer: { value: '1', unit: 'm' },
+        unitRule: { mode: 'required', acceptedUnits: ['   '] },
+      },
+      {
+        ...sharedFields,
+        id: 'q-unit-optional-whitespace',
+        type: 'numeric',
+        answer: { value: '1', unit: '   ' },
+        unitRule: { mode: 'optional' },
+      },
     ];
 
     const result = validateQuestionBank({
@@ -404,6 +425,27 @@ describe('OpenQuestionBank Core', () => {
     );
     expect(result.diagnostics).toContainEqual(
       expect.objectContaining({ code: 'OQB-SCORE-002', entityId: 'q-unit-alias' }),
+    );
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'OQB-SCORE-001',
+        entityId: 'q-unit-whitespace',
+        fieldPath: 'answer.unit',
+      }),
+    );
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'OQB-QUALITY-001',
+        entityId: 'q-unit-alias-whitespace',
+        fieldPath: 'unitRule.acceptedUnits[0]',
+      }),
+    );
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'OQB-QUALITY-001',
+        entityId: 'q-unit-optional-whitespace',
+        fieldPath: 'answer.unit',
+      }),
     );
   });
 
