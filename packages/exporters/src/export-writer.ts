@@ -7,6 +7,7 @@ import {
   readFile,
   realpath,
   rename,
+  rmdir,
   rm,
   stat,
   type FileHandle,
@@ -24,6 +25,7 @@ import {
   type QuestionBankData,
 } from '@openquestionbank/core';
 import {
+  assertNoCredentialedQuestionBankUrls,
   assertSafeExportPath,
   assertUniquePortableExportPaths,
   collectReferencedAssets,
@@ -70,6 +72,7 @@ export async function collectExportAssetSources(
   bank: Bank,
   maxTotalAssetBytes = defaultMaxTotalAssetBytes,
 ): Promise<ExportAssetSource[]> {
+  assertNoCredentialedQuestionBankUrls(data);
   if (!Number.isSafeInteger(maxTotalAssetBytes) || maxTotalAssetBytes < 0) {
     throw new RangeError('maxTotalAssetBytes 必须是非负安全整数');
   }
@@ -427,6 +430,41 @@ export async function readPreviousExportFiles(outputRoot: string): Promise<Previ
   return files;
 }
 
+/** 移除未修改且会阻止本次导出路径创建的旧文件 */
+export async function removeManagedExportPathConflicts(
+  outputRoot: string,
+  previousFiles: readonly PreviousExportFile[],
+  currentPaths: readonly string[],
+): Promise<void> {
+  for (const previousFile of previousFiles) {
+    const conflictingPath = currentPaths.find(
+      (currentPath) =>
+        isPortableExportPathAncestor(previousFile.path, currentPath) ||
+        isPortableExportPathAncestor(currentPath, previousFile.path),
+    );
+    if (!conflictingPath) {
+      continue;
+    }
+
+    const target = await getExistingOutputFile(outputRoot, previousFile.path);
+    if (!target) {
+      continue;
+    }
+    const currentFile = await describeExportAsset(previousFile.path, target);
+    if (
+      currentFile.sizeBytes !== previousFile.sizeBytes ||
+      currentFile.sha256 !== previousFile.sha256
+    ) {
+      continue;
+    }
+
+    await rm(target);
+    if (isPortableExportPathAncestor(conflictingPath, previousFile.path)) {
+      await removeEmptyOutputDirectories(outputRoot, previousFile.path, conflictingPath);
+    }
+  }
+}
+
 /** 删除上一版清单登记且本次未生成、内容也未被修改的文件 */
 export async function removeStaleExportFiles(
   outputRoot: string,
@@ -541,6 +579,38 @@ async function getExistingOutputFile(
   }
 }
 
+async function removeEmptyOutputDirectories(
+  outputRoot: string,
+  previousPath: string,
+  currentPath: string,
+): Promise<void> {
+  const previousSegments = previousPath.split('/');
+  const currentDepth = currentPath.split('/').length;
+  for (let depth = previousSegments.length - 1; depth >= currentDepth; depth--) {
+    const directory = join(outputRoot, ...previousSegments.slice(0, depth));
+    try {
+      await rmdir(directory);
+    } catch (error) {
+      if (isMissingPath(error)) {
+        continue;
+      }
+      if (isDirectoryNotEmpty(error)) {
+        return;
+      }
+      throw error;
+    }
+  }
+}
+
+function isPortableExportPathAncestor(parent: string, target: string): boolean {
+  const parentSegments = getPortableExportPathKey(parent).split('/');
+  const targetSegments = getPortableExportPathKey(target).split('/');
+  return (
+    parentSegments.length < targetSegments.length &&
+    parentSegments.every((segment, index) => segment === targetSegments[index])
+  );
+}
+
 async function mayBeSameFile(left: string, right: string): Promise<boolean> {
   try {
     const [leftMetadata, rightMetadata] = await Promise.all([stat(left), stat(right)]);
@@ -604,6 +674,15 @@ function isPathWithin(parent: string, target: string): boolean {
 
 function isMissingPath(error: unknown): boolean {
   return typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT';
+}
+
+function isDirectoryNotEmpty(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error.code === 'ENOTEMPTY' || error.code === 'EEXIST')
+  );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

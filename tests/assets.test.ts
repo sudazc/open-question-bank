@@ -23,6 +23,7 @@ import {
   readPreviousExportFiles,
   removeStaleExportFiles,
 } from '../packages/exporters/src/export-writer.js';
+import { writeQuestionBankJsonExport } from '../packages/exporters/src/index.js';
 import { bank, knowledge } from './fixtures.js';
 
 describe('Core 资源校验', () => {
@@ -628,6 +629,68 @@ describe('Core 资源校验', () => {
   });
 });
 
+describe('导出文件写入', () => {
+  let rootDir: string;
+
+  beforeEach(async () => {
+    rootDir = await mkdtemp(join(tmpdir(), 'oqb-export-writer-'));
+    await createBank(rootDir);
+  });
+
+  afterEach(async () => {
+    await rm(rootDir, { recursive: true, force: true });
+  });
+
+  it('在创建输出目录或复制资源前拒绝含访问凭据的题库', async () => {
+    const assetPath = 'assets/private.dat';
+    const outputDirectory = join(rootDir, 'credential-output');
+    await writeFile(join(rootDir, assetPath), 'private resource');
+
+    await expect(
+      writeQuestionBankJsonExport(
+        createExportData([assetPath], 'https://example.com/?access_token=secret'),
+        rootDir,
+        outputDirectory,
+      ),
+    ).rejects.toThrow('访问凭据');
+    await expect(readdir(outputDirectory)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('旧导出文件变为新目录时先清理未修改的旧文件', async () => {
+    const outputDirectory = join(rootDir, 'file-to-directory-output');
+    const stalePath = 'assets/archive';
+    const staleContents = '旧资源';
+    const assetPath = 'assets/archive/new.dat';
+    await mkdir(outputDirectory);
+    await mkdir(join(outputDirectory, 'assets'));
+    await writeFile(join(outputDirectory, stalePath), staleContents);
+    await writePreviousManifest(outputDirectory, stalePath, staleContents);
+    await mkdir(join(rootDir, 'assets', 'archive'));
+    await writeFile(join(rootDir, assetPath), '新资源');
+
+    await writeQuestionBankJsonExport(createExportData([assetPath]), rootDir, outputDirectory);
+
+    expect(await readFile(join(outputDirectory, 'assets', 'archive', 'new.dat'), 'utf8')).toBe(
+      '新资源',
+    );
+  });
+
+  it('旧导出目录变为新文件时先清理未修改的旧文件和空目录', async () => {
+    const outputDirectory = join(rootDir, 'directory-to-file-output');
+    const stalePath = 'assets/archive/old.dat';
+    const staleContents = '旧资源';
+    const assetPath = 'assets/archive';
+    await mkdir(join(outputDirectory, 'assets', 'archive'), { recursive: true });
+    await writeFile(join(outputDirectory, stalePath), staleContents);
+    await writePreviousManifest(outputDirectory, stalePath, staleContents);
+    await writeFile(join(rootDir, assetPath), '新资源');
+
+    await writeQuestionBankJsonExport(createExportData([assetPath]), rootDir, outputDirectory);
+
+    expect(await readFile(join(outputDirectory, 'assets', 'archive'), 'utf8')).toBe('新资源');
+  });
+});
+
 async function createBank(rootDir: string): Promise<void> {
   for (const directory of ['topics', 'knowledge', 'questions', 'groups', 'exams', 'assets']) {
     await mkdir(join(rootDir, directory), { recursive: true });
@@ -650,6 +713,45 @@ async function createBank(rootDir: string): Promise<void> {
       '  exams: exams',
       '  assets: assets',
     ].join('\n'),
+  );
+}
+
+function createExportData(assets: string[], sourceUrl?: string): QuestionBankData {
+  return {
+    bank,
+    topics: [],
+    knowledge: [
+      {
+        ...knowledge,
+        body: '资源写入测试',
+        assets,
+        source:
+          sourceUrl === undefined ? knowledge.source : { ...knowledge.source, url: sourceUrl },
+      },
+    ],
+    questions: [],
+    groups: [],
+    exams: [],
+  };
+}
+
+async function writePreviousManifest(
+  outputDirectory: string,
+  path: string,
+  contents: string,
+): Promise<void> {
+  await writeFile(
+    join(outputDirectory, 'manifest.json'),
+    JSON.stringify({
+      format: 'openquestionbank-json',
+      files: [
+        {
+          path,
+          sizeBytes: Buffer.byteLength(contents, 'utf8'),
+          sha256: createHash('sha256').update(contents, 'utf8').digest('hex'),
+        },
+      ],
+    }),
   );
 }
 

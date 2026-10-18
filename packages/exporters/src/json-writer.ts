@@ -4,6 +4,7 @@ import {
   copyExportAssets,
   prepareExportDirectory,
   readPreviousExportFiles,
+  removeManagedExportPathConflicts,
   writeManagedExportFiles,
   type ExportWriterOptions,
 } from './export-writer.js';
@@ -35,18 +36,22 @@ export async function writeQuestionBankJsonExport(
     bank,
     options.maxTotalAssetBytes,
   );
-  const targetDirectory = await prepareExportDirectory(sourceDirectory, outputDirectory, bank, [
+  const currentPaths = [
     questionBankFilename,
     manifestFilename,
     ...assetSources.map(({ path }) => path),
-  ]);
+  ];
+  const targetDirectory = await prepareExportDirectory(
+    sourceDirectory,
+    outputDirectory,
+    bank,
+    currentPaths,
+  );
   const previousFiles = await readPreviousExportFiles(targetDirectory);
+  await removeManagedExportPathConflicts(targetDirectory, previousFiles, currentPaths);
   const assets = await copyExportAssets(assetSources, targetDirectory);
   const exported = createQuestionBankJsonExport(data, assets);
-  await writeManagedExportFiles(targetDirectory, exported.files, previousFiles, [
-    ...exported.files.map(({ path }) => path),
-    ...assetSources.map(({ path }) => path),
-  ]);
+  await writeManagedExportFiles(targetDirectory, exported.files, previousFiles, currentPaths);
 
   return { manifest: exported.manifest, outputDirectory: targetDirectory };
 }
