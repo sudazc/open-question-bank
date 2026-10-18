@@ -135,6 +135,11 @@ describe('OpenQuestionBank Core', () => {
     ['百分号编码的凭据', 'https://%75ser:%73ecret@example.com/question'],
     ['格式错误 URL 中的凭据', 'https://user:secret@example.com:invalid/question'],
     ['非 HTTP URL 中的凭据', 'ftp://user:secret@example.com/question'],
+    ['访问令牌查询参数', 'https://example.com/question?access_token=secret'],
+    ['API key 查询参数', 'https://example.com/question?key=secret'],
+    ['百分号编码参数名', 'https://example.com/question?access%5Ftoken=secret'],
+    ['签名查询参数', 'https://example.com/question?X-Amz-Signature=secret'],
+    ['格式错误 URL 中的令牌查询参数', 'https://example.com:invalid/question?token=secret'],
   ])('阻止来源 URL 包含%s', async (_description, sourceUrl) => {
     await writeFile(
       join(rootDir, 'questions/one.yaml'),
@@ -153,7 +158,7 @@ describe('OpenQuestionBank Core', () => {
       file: 'questions/one.yaml',
       entityId: 'q-one',
       fieldPath: 'source.url',
-      message: '来源 URL 不得包含用户名或密码',
+      message: '来源 URL 不得包含访问凭据',
     });
     expect(JSON.stringify(diagnostic)).not.toContain('secret');
   });
@@ -773,6 +778,8 @@ describe('OpenQuestionBank Core', () => {
     ['HTML 字符引用', '[凭据链接](https://user&#64;example.com/private)'],
     ['百分号编码用户名', '[凭据链接](https://user%40name:secret@example.com/private)'],
     ['格式错误 URL', '[凭据链接](https://user:secret@)'],
+    ['访问令牌查询参数', '[凭据链接](https://example.com/private?access_token=secret)'],
+    ['签名查询参数', 'https://example.com/private?X-Goog-Signature=secret'],
   ])('拒绝%s中的 URL 凭据且不回显凭据', async (_format, markdown) => {
     const note = knowledgeMarkdown('k-one', '', 'k-two').replace(
       '正文和引用 [关联知识](oqb://knowledge/k-two)。',
@@ -794,7 +801,7 @@ describe('OpenQuestionBank Core', () => {
     const note = knowledgeMarkdown('k-one', '', 'k-two').replace(
       '正文和引用 [关联知识](oqb://knowledge/k-two)。',
       [
-        '[安全链接](https://example.com)',
+        '[安全链接](https://example.com/search?q=design&page=2&section=chapter&access_token=)',
         '',
         '~~~text',
         'https://user:secret@example.com/private',

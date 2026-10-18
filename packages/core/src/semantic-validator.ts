@@ -11,7 +11,7 @@ import type { Diagnostic } from './diagnostics.js';
 import { getExamRuleCandidates } from './exam-rules.js';
 import { decodeHtmlCharacterReferences } from './html-entities.js';
 import type { LocatedEntity, LocatedQuestionBank } from './types.js';
-import { hasUrlAuthorityCredentials, parseHttpUrl } from './url-security.js';
+import { hasUrlCredentials, parseHttpUrl } from './url-security.js';
 
 /** 检查结构有效实体之间的引用、树关系、答案关系和组卷关系 */
 export function validateSemantics(bank: LocatedQuestionBank, diagnostics: Diagnostic[]): void {
@@ -38,15 +38,16 @@ function validateSourceUrls(bank: LocatedQuestionBank, diagnostics: Diagnostic[]
     const source = entity.value.source;
     if (source.url !== undefined) {
       const url = parseHttpUrl(source.url);
-      if (hasUrlAuthorityCredentials(source.url)) {
+      if (hasUrlCredentials(source.url)) {
         diagnostics.push({
           code: 'OQB-SOURCE-003',
           severity: 'error',
-          message: '来源 URL 不得包含用户名或密码',
+          message: '来源 URL 不得包含访问凭据',
           file: entity.file,
           entityId: entity.value.id,
           fieldPath: 'source.url',
-          suggestion: '移除 URL 中的用户名和密码，改用不含访问凭据的来源地址',
+          suggestion:
+            '移除 URL authority 中的用户名和密码及常见凭据参数，改用不含访问凭据的来源地址',
         });
       } else if (!url) {
         diagnostics.push({

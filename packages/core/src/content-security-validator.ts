@@ -6,7 +6,7 @@ import {
 } from './asset-validator.js';
 import { decodeHtmlCharacterReferences } from './html-entities.js';
 import type { LocatedQuestionBank, QuestionBankData } from './types.js';
-import { hasUrlAuthorityCredentials } from './url-security.js';
+import { hasUrlCredentials } from './url-security.js';
 
 interface ContentField {
   value: string;
@@ -69,11 +69,11 @@ export function validateContentSecurity(
       diagnostics.push({
         code: 'OQB-SECURITY-003',
         severity: 'error',
-        message: 'Markdown 链接目标不得包含用户名或密码',
+        message: 'Markdown 链接目标不得包含访问凭据',
         file: field.file,
         entityId: field.entityId,
         fieldPath: field.fieldPath,
-        suggestion: '移除 URL authority 中的用户名和密码，改用不含访问凭据的链接',
+        suggestion: '移除 URL authority 中的用户名和密码及常见凭据参数，改用不含访问凭据的链接',
       });
     }
   }
@@ -90,7 +90,7 @@ export function hasCredentialedQuestionBankUrls(data: QuestionBankData): boolean
     exams: data.exams.map((value) => ({ value, file: 'exams' })),
   };
   const hasCredentialedSourceUrl = [...data.knowledge, ...data.questions, ...data.groups].some(
-    ({ source }) => source.url !== undefined && hasUrlAuthorityCredentials(source.url),
+    ({ source }) => source.url !== undefined && hasUrlCredentials(source.url),
   );
   return (
     hasCredentialedSourceUrl ||
@@ -234,7 +234,7 @@ function isUnsafeDestination(destination: string): boolean {
 }
 
 function hasDestinationCredentials(destination: string): boolean {
-  return hasUrlAuthorityCredentials(normalizeDestination(destination));
+  return hasUrlCredentials(normalizeDestination(destination));
 }
 
 function extractAllMarkdownUrlDestinations(markdown: string): string[] {
@@ -256,10 +256,31 @@ function normalizeDestination(destination: string): string {
 function extractHttpUrls(markdown: string): string[] {
   const urls: string[] = [];
   for (const match of maskMarkdownCode(markdown).matchAll(/\bhttps?:\/\/[^\s<>"'`]+/gi)) {
-    const url = match[0];
+    const url = trimUnmatchedClosingParentheses(match[0]);
     if (url) {
       urls.push(url);
     }
   }
   return urls;
+}
+
+function trimUnmatchedClosingParentheses(url: string): string {
+  let openParentheses = 0;
+  let unmatchedClosingParentheses = 0;
+  for (const character of url) {
+    if (character === '(') {
+      openParentheses += 1;
+    } else if (character === ')') {
+      if (openParentheses > 0) {
+        openParentheses -= 1;
+      } else {
+        unmatchedClosingParentheses += 1;
+      }
+    }
+  }
+  const trailingClosingParentheses = /\)+$/.exec(url)?.[0].length ?? 0;
+  return url.slice(
+    0,
+    url.length - Math.min(unmatchedClosingParentheses, trailingClosingParentheses),
+  );
 }

@@ -62,7 +62,7 @@ https://github.com/sudazc/open-question-bank/blob/main/AI_GUIDE.md
 `source.type` 的合法值为 `original`、`official_public`、`licensed`、`adapted`、`unknown`。按实际情况选择，不要把 `official_public` 当作再发布授权。
 
 - 根据指定资料改写或整理而成的内容，使用合适的来源类型并记录可核实的标题和 URL。
-- `source.url` 只填写不含用户名或密码的 HTTP / HTTPS 地址。需要登录后才能访问的来源，不要把账号、密码或访问凭据写入 URL 或题库文件。
+- `source.url` 只填写不含用户名、密码或常见访问凭据查询参数的 HTTP / HTTPS 地址，例如 `token`、`access_token`、`api_key`、`key` 和签名参数。需要登录后才能访问的来源，不要把账号、密码或访问凭据写入 URL 或题库文件。
 - 只有来源明确提供许可证或署名要求时，才填写对应的 `source.license` 和 `source.attribution`。未知信息留待用户确认，不要猜测。
 - `bank.yaml` 中的题库许可证说明本题库的发布授权。必须询问用户；若用户暂时无法决定，可在草稿中写清楚的待确认占位值，例如 `TBD - not for publication`，并在完成说明中指出尚未确认。
 - 许可证和署名尚未确认、内容未人工审核时，不要宣称题库适合公开发布，也不要仅为通过检查而运行或推荐 `strict` / `release` 模式。

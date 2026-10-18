@@ -122,7 +122,7 @@ Markdown 允许常用安全标签 `br`、`hr`、`sub`、`sup`、`kbd`、`mark`�
 
 `Topic` 与 `Exam` 没有审核或来源字段，因此不单独检查审核授权；模板试卷会在筛选后按剩余候选重新执行数量校验。Markdown 中指向被筛除内容的 `oqb://` 链接会在最终引用校验中产生错误，调用方应检查 `valid` 后再使用 release 数据。
 
-已填写的来源链接应为有效的 HTTP / HTTPS URL。URL authority 中可识别出用户名或密码时会产生阻止校验通过的 `OQB-SOURCE-003` 错误，即使该 URL 格式错误或使用其他协议也会阻止导出；诊断不会回显凭据。Markdown 链接目标及正文中的 HTTP(S) 自动链接也会检查凭据，authority 中包含用户名或密码时会产生 `OQB-SECURITY-003` 错误。公开 exporter API 会重复检查这些来源和链接，即使调用方直接使用 API 而未经过 CLI，也不会生成带凭据的导出包。来源链接缺失或其他格式无效的情况仍以 warning 提示，Core 不联网检查链接可访问性。
+已填写的来源链接应为有效的 HTTP / HTTPS URL。URL authority 中可识别出用户名或密码，或查询参数中包含常见访问凭据时，会产生阻止校验通过的 `OQB-SOURCE-003` 错误，即使该 URL 格式错误或使用其他协议也会阻止导出；诊断不会回显凭据。常见凭据参数包括 `token`、`access_token`、`refresh_token`、`api_key`、`key`、`password`、`signature`、`sig`、AWS / Google 云存储签名参数等，参数名大小写及连字符、下划线差异不敏感，空值不会触发诊断。普通查询参数（如 `q`、`page`）不受影响。Markdown 链接目标及正文中的 HTTP(S) 自动链接也会检查这些凭据，命中 authority 用户名 / 密码或常见凭据参数时会产生 `OQB-SECURITY-003` 错误。公开 exporter API 会重复检查这些来源和链接，即使调用方直接使用 API 而未经过 CLI，也不会生成带已识别凭据的导出包。来源链接缺失或其他格式无效的情况仍以 warning 提示，Core 不联网检查链接可访问性。
 
 Core 只检查当前 `review.status`，不记录或比较内容审核时的版本。实质修改已审核内容后，应由 Git 变更审阅流程将状态改为 `pending`、清除旧版本的审核人和审核时间，并在人工复审后重新批准。
 

@@ -135,6 +135,16 @@ describe('各格式共用的导出安全检查', () => {
         })),
       },
     ],
+    [
+      '访问令牌查询参数',
+      {
+        ...data,
+        knowledge: data.knowledge.map((entity) => ({
+          ...entity,
+          source: { ...entity.source, url: 'https://example.com/private?access_token=secret' },
+        })),
+      },
+    ],
   ])('直接调用各格式导出器时也拒绝含凭据的%s', (_description, credentialedData) => {
     const exporters = [
       () => createQuestionBankJsonExport(credentialedData, assets),
