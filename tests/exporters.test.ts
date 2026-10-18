@@ -716,7 +716,14 @@ describe('OpenQuestionBank Obsidian Vault 导出器', () => {
     const exported = createQuestionBankObsidianVaultExport(
       {
         ...data,
-        topics: [{ ...topic, name: 'CON.txt' }],
+        topics: [
+          ...data.topics,
+          { ...topic, id: 'topic-device-con', name: 'CON.txt' },
+          { ...topic, id: 'topic-device-com-superscript', name: 'COM¹' },
+          { ...topic, id: 'topic-device-lpt-superscript', name: 'LPT³' },
+          { ...topic, id: 'topic-device-conin', name: 'CONIN$' },
+          { ...topic, id: 'topic-device-conout', name: 'CONOUT$' },
+        ],
       },
       assets,
     );
@@ -725,6 +732,10 @@ describe('OpenQuestionBank Obsidian Vault 导出器', () => {
       .map(({ path }) => path);
 
     expect(exported.files.map(({ path }) => path)).toContain('考点/考点 CON.txt.md');
+    expect(exported.files.map(({ path }) => path)).toContain('考点/考点 COM¹.md');
+    expect(exported.files.map(({ path }) => path)).toContain('考点/考点 LPT³.md');
+    expect(exported.files.map(({ path }) => path)).toContain('考点/考点 CONIN$.md');
+    expect(exported.files.map(({ path }) => path)).toContain('考点/考点 CONOUT$.md');
     expect(new Set(questionPaths).size).toBe(data.questions.length);
   });
 

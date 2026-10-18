@@ -6,6 +6,7 @@ import { maskMarkdownCode } from './markdown-utils.js';
 import {
   assertUniquePortableExportPaths,
   getPortableExportPathKey,
+  isWindowsReservedName,
   type ExportAsset,
 } from './export-common.js';
 import type { ExportFile } from './export-writer.js';
@@ -572,9 +573,7 @@ function safePageTitle(value: string, kind: EntityKind): string {
   if (!title) {
     return '未命名' + entityKindLabel(kind);
   }
-  return /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$/i.test(title)
-    ? entityKindLabel(kind) + ' ' + title
-    : title;
+  return isWindowsReservedName(title) ? entityKindLabel(kind) + ' ' + title : title;
 }
 
 function entityKindLabel(kind: EntityKind): string {

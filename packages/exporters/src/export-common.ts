@@ -90,7 +90,7 @@ export function assertSafeExportPath(path: string, label = '导出文件路径')
   }
 }
 
-function isWindowsReservedName(segment: string): boolean {
+export function isWindowsReservedName(segment: string): boolean {
   const baseName = segment.split('.')[0]?.replace(/[ .]+$/, '') ?? '';
   return /^(?:con|prn|aux|nul|conin\$|conout\$|com[1-9¹²³]|lpt[1-9¹²³])$/i.test(baseName);
 }
