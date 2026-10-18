@@ -432,6 +432,58 @@ describe('OpenQuestionBank Core', () => {
     expect(result.diagnostics.map(({ code }) => code)).not.toContain('OQB-REF-004');
   });
 
+  it.each([
+    ['页面双链', '[[knowledge/k-two]]'],
+    ['带别名的页面双链', '[[knowledge/k-two|关联知识]]'],
+    ['页面嵌入', '![[knowledge/k-two]]'],
+  ])('拒绝%s并建议使用平台无关引用', async (_format, wikilink) => {
+    const notePath = join(rootDir, 'knowledge/one.md');
+    const note = await readFile(notePath, 'utf8');
+    await writeFile(
+      notePath,
+      note.replace('正文和引用 [关联知识](oqb://knowledge/k-two)。', wikilink),
+    );
+
+    const result = await validateQuestionBankDirectory(rootDir);
+
+    expect(result.valid).toBe(false);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'OQB-REF-005',
+        severity: 'error',
+        entityId: 'k-one',
+        fieldPath: 'body',
+      }),
+    );
+  });
+
+  it('忽略代码、转义文本和行内数学公式中的双中括号', async () => {
+    const notePath = join(rootDir, 'knowledge/one.md');
+    const note = await readFile(notePath, 'utf8');
+    await writeFile(
+      notePath,
+      note.replace(
+        '正文和引用 [关联知识](oqb://knowledge/k-two)。',
+        [
+          '`[[knowledge/k-two]]`',
+          '```md',
+          '[[knowledge/k-two]]',
+          '```',
+          '\\[\\[knowledge/k-two\\]\\]',
+          '$[[x]]$',
+          '$$[[x]]$$',
+          '\\([[x]]\\)',
+          '\\[[x]]\\]',
+        ].join('\n'),
+      ),
+    );
+
+    const result = await validateQuestionBankDirectory(rootDir);
+
+    expect(result.valid).toBe(true);
+    expect(result.diagnostics.map(({ code }) => code)).not.toContain('OQB-REF-005');
+  });
+
   it('拒绝格式无效的 Markdown 内部引用 URI', async () => {
     const notePath = join(rootDir, 'knowledge/one.md');
     const note = await readFile(notePath, 'utf8');

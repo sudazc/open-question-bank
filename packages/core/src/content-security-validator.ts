@@ -25,7 +25,21 @@ export function validateContentSecurity(
   diagnostics: Diagnostic[],
 ): void {
   for (const field of collectContentFields(bank)) {
-    const searchable = maskMarkdownCode(field.value)
+    const markdown = maskMarkdownCode(field.value);
+    if (containsObsidianWikilink(maskMarkdownMath(markdown))) {
+      diagnostics.push({
+        code: 'OQB-REF-005',
+        severity: 'error',
+        message: '题库源 Markdown 不支持 Obsidian Wiki 双链',
+        file: field.file,
+        entityId: field.entityId,
+        fieldPath: field.fieldPath,
+        suggestion:
+          '使用平台无关的 Markdown 语法；内部实体引用使用 oqb:// URI，资源使用 Markdown 图片或相对链接',
+      });
+    }
+
+    const searchable = markdown
       .replace(/(\]\s*\(\s*)<([^>\n]+)>/g, '$1 ')
       .replace(/^((?:[ \t]{0,3}>[ \t]?)*[ \t]*\[[^\]\n]+\]:[ \t]*)<([^>\n]+)>/gm, '$1 ')
       .replace(
@@ -77,6 +91,32 @@ export function validateContentSecurity(
       });
     }
   }
+}
+
+function containsObsidianWikilink(markdown: string): boolean {
+  for (const match of markdown.matchAll(/\[\[([^\]\n]+)\]\]/g)) {
+    if (match.index !== undefined && !isMarkdownEscaped(markdown, match.index)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function maskMarkdownMath(markdown: string): string {
+  const mask = (span: string): string => span.replace(/[^\r\n]/g, ' ');
+  return markdown
+    .replace(/(?<!\\)\\\[[\s\S]*?\\\]/g, mask)
+    .replace(/(?<!\\)\\\([\s\S]*?\\\)/g, mask)
+    .replace(/(?<!\\)\$\$[\s\S]*?(?<!\\)\$\$/g, mask)
+    .replace(/(?<!\\)\$(?=\S)[^\r\n]*?\S(?<!\\)\$(?!\$)/g, mask);
+}
+
+function isMarkdownEscaped(markdown: string, index: number): boolean {
+  let backslashCount = 0;
+  for (let cursor = index - 1; markdown[cursor] === '\\'; cursor -= 1) {
+    backslashCount += 1;
+  }
+  return backslashCount % 2 === 1;
 }
 
 /** 检查题库数据中维护者 URL、来源 URL 和 Markdown 链接目标是否包含访问凭据 */

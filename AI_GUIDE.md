@@ -86,6 +86,7 @@ https://github.com/sudazc/open-question-bank/blob/main/AI_GUIDE.md
 - `init` 生成的考点、知识笔记、题目和题库元数据只是帮助理解格式、验证工具的模板示例，不代表用户要求的正式题库内容。交付前必须替换或删除所有示例和占位信息；尤其要按实际内容修改题库名称、简介、维护者和许可证，不要把模板中的示例题、示例知识或许可证当作已确认内容。
 - 每个实体使用稳定 ID；题目、知识和考点之间按 ID 关联，不按文件名关联。
 - 按 `bank.yaml` 中的 `paths` 保存文件；Knowledge 使用 Markdown Front Matter，正文从 Front Matter 后开始。
+- 源 Markdown 的内部实体引用写成 `[关联内容](oqb://knowledge/{id})` 这样的标准链接；考点、题目和试卷使用各自对应的 `oqb://` 实体地址。不要写 Obsidian Wiki 双链或嵌入（`[[...]]`、`![[...]]`），以免 GitHub Markdown 和 Notion 导出无法统一处理。
 - 每道题至少要有稳定 ID、题型、题干、正确答案、难度、分值、所属考点或知识、来源和审核状态。六种题型及答案结构以 `docs/data-model.md` 和 Schema 为准。
 - 编写填空题时，在题干中用 `{{blank-id}}` 标出每个空，并在 `answer.blanks` 中使用相同的 ID；每个答案空项在题干中只能出现一次。不要把代码示例里的双花括号当作实际填空位置。
 - Markdown 资源必须放在题库根目录下的配置资源目录中，使用正斜杠相对路径，并在实体 `assets` 字段中声明。为了能导出到 Windows、macOS 和 Linux，文件名每段不得含 Windows 非法字符或控制字符，不得以点或空格结尾，不得使用 `CON`、`NUL` 等设备名，UTF-8 长度不得超过 255 字节；避免资源和导出页面之间出现大小写或 Unicode 规范化后重名。

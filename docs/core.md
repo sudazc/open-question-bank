@@ -104,7 +104,7 @@ const exam = generateExam(validated.data, 'exam-template', 'practice-001');
 
 复用 SVG 安全规则时，可使用 `maxSvgAssetBytes` 获取单文件上限，并用 `getSvgSecurityIssue(source)` 检查 SVG 文本；安全内容返回 `undefined`，否则返回问题说明。导出器会对实际复制的 SVG 内容再次执行同一检查。
 
-Markdown 允许常用安全标签 `br`、`hr`、`sub`、`sup`、`kbd`、`mark`、`details` 和 `summary`。其他原始 HTML、文档实体声明及不受支持的 URI 协议会被拒绝；外部 Markdown 链接只允许 `http:`、`https:`、`mailto:` 和 `tel:`，内部引用必须符合 `oqb://{topic|knowledge|question|exam}/{id}` 格式并指向存在的实体。文件协议和应用专用协议（例如 `obsidian:`、`vscode:`）不允许进入题库正文。代码块和行内代码中的示例不参与安全扫描。SVG 只允许静态图形，不允许脚本、事件处理器、样式、动画、外部引用或 XML 实体。该策略会拦截内容，不会把输入改写成经过净化的 HTML。
+Markdown 允许常用安全标签 `br`、`hr`、`sub`、`sup`、`kbd`、`mark`、`details` 和 `summary`。其他原始 HTML、文档实体声明及不受支持的 URI 协议会被拒绝；外部 Markdown 链接只允许 `http:`、`https:`、`mailto:` 和 `tel:`，内部引用必须符合 `oqb://{topic|knowledge|question|exam}/{id}` 格式并指向存在的实体。文件协议和应用专用协议（例如 `obsidian:`、`vscode:`）不允许进入题库正文；Obsidian Wiki 双链和嵌入（`[[...]]`、`![[...]]`）也不属于源格式，会产生 `OQB-REF-005` 错误。代码块、行内代码、转义文本，以及使用 `$...$`、`$$...$$`、`\(...\)` 或 `\[...\]` 界定的数学公式中的示例不参与相应引用检查。SVG 只允许静态图形，不允许脚本、事件处理器、样式、动画、外部引用或 XML 实体。该策略会拦截内容，不会把输入改写成经过净化的 HTML。
 
 内容质量检查会拒绝仅含空白字符的题库名称、许可证、维护者名称、题目难度和答案要点等必填文本；在 strict / release 模式下，许可证空值由授权校验报告。它还会对完全重复的题干，以及经大小写、空白和 Unicode 兼容字符规范化后重复的选择题选项发出警告。警告不阻止草稿校验或导出；内容正确性、难度平衡、干扰项质量等仍需人工审核。
 
@@ -130,4 +130,4 @@ Core 只检查当前 `review.status`，不记录或比较内容审核时的版�
 
 每条诊断包含错误码、等级、消息和相对文件路径；可选字段包括实体 ID、字段路径、建议和行列位置。等级为 `fatal` 或 `error` 时 `ValidationResult.valid` 为 `false`；`warning` 和 `info` 不阻止校验通过。`release` 的 `data` 和 `index` 只包含最终筛选结果。
 
-错误码格式为 `OQB-{类别}-{编号}`。`FILE`、`SCHEMA`、`QUESTION`、`SCORE`、`REF`、`GROUP`、`EXAM`、`ASSET`、`QUALITY`、`REVIEW`、`LICENSE` 和 `VERSION` 分别表示文件、结构、题目语义、评分规则、实体引用、材料题组、试卷、资源、内容质量、审核、授权和版本诊断；Core 也会使用 `SECURITY`、`SOURCE`、`TOPIC` 和 `KNOWLEDGE` 表示对应的细分诊断。数值题要求单位但缺少标准答案单位时产生 `OQB-SCORE-001`；`acceptedUnits` 未包含标准答案单位时产生 `OQB-SCORE-002`。已生成试卷记录的题库版本与当前版本不一致时产生非阻断警告 `OQB-VERSION-001`。
+错误码格式为 `OQB-{类别}-{编号}`。`FILE`、`SCHEMA`、`QUESTION`、`SCORE`、`REF`、`GROUP`、`EXAM`、`ASSET`、`QUALITY`、`REVIEW`、`LICENSE` 和 `VERSION` 分别表示文件、结构、题目语义、评分规则、实体引用、材料题组、试卷、资源、内容质量、审核、授权和版本诊断；Core 也会使用 `SECURITY`、`SOURCE`、`TOPIC` 和 `KNOWLEDGE` 表示对应的细分诊断。`OQB-REF-005` 表示源 Markdown 使用了 Obsidian Wiki 双链或嵌入语法。数值题要求单位但缺少标准答案单位时产生 `OQB-SCORE-001`；`acceptedUnits` 未包含标准答案单位时产生 `OQB-SCORE-002`。已生成试卷记录的题库版本与当前版本不一致时产生非阻断警告 `OQB-VERSION-001`。
