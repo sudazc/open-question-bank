@@ -495,10 +495,13 @@ describe('OpenQuestionBank CLI', () => {
     const sourceUrl = 'https://alice:secret@example.com/question';
     await runCli(['init', bankDir], output);
     const questionFile = join(bankDir, 'questions', 'example.yaml');
-    const question = (await readFile(questionFile, 'utf8')).replace(
-      'source:\n  type: original',
-      `source:\n  type: original\n  url: "${sourceUrl}"`,
+    const questionTemplate = await readFile(questionFile, 'utf8');
+    const question = questionTemplate.replace(
+      /source:\r?\n\x20{2}type: original/,
+      (sourceBlock) =>
+        `${sourceBlock}${sourceBlock.includes('\r\n') ? '\r\n' : '\n'}  url: "${sourceUrl}"`,
     );
+    expect(question).not.toBe(questionTemplate);
     await writeFile(questionFile, question);
 
     const exitCode = await runCli(
