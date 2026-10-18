@@ -10,7 +10,7 @@ export interface ExportAsset {
 /** 在写入导出目录前拒绝包含访问凭据的题库内容 */
 export function assertNoCredentialedQuestionBankUrls(data: QuestionBankData): void {
   if (hasCredentialedQuestionBankUrls(data)) {
-    throw new Error('题库来源或 Markdown 链接中存在访问凭据，拒绝导出');
+    throw new Error('题库元数据、来源或 Markdown 链接中存在访问凭据，拒绝导出');
   }
 }
 

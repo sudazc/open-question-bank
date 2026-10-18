@@ -136,6 +136,18 @@ describe('各格式共用的导出安全检查', () => {
       },
     ],
     [
+      '维护者 URL',
+      {
+        ...data,
+        bank: {
+          ...bank,
+          maintainers: [
+            { name: 'OpenQuestionBank', url: 'https://example.com/profile?token=secret' },
+          ],
+        },
+      },
+    ],
+    [
       '访问令牌查询参数',
       {
         ...data,

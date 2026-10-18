@@ -656,6 +656,26 @@ describe('导出文件写入', () => {
     await expect(readdir(outputDirectory)).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
+  it('在创建输出目录前拒绝含凭据的维护者 URL', async () => {
+    const assetPath = 'assets/private.dat';
+    const outputDirectory = join(rootDir, 'maintainer-credential-output');
+    await writeFile(join(rootDir, assetPath), 'private resource');
+    const credentialedData: QuestionBankData = {
+      ...createExportData([assetPath]),
+      bank: {
+        ...bank,
+        maintainers: [
+          { name: 'OpenQuestionBank', url: 'https://example.com/profile?token=secret' },
+        ],
+      },
+    };
+
+    await expect(
+      writeQuestionBankJsonExport(credentialedData, rootDir, outputDirectory),
+    ).rejects.toThrow('访问凭据');
+    await expect(readdir(outputDirectory)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
   it('旧导出文件变为新目录时先清理未修改的旧文件', async () => {
     const outputDirectory = join(rootDir, 'file-to-directory-output');
     const stalePath = 'assets/archive';

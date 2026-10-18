@@ -22,6 +22,7 @@ export function validateSemantics(bank: LocatedQuestionBank, diagnostics: Diagno
   const exams = uniqueEntityMap(bank.exams, 'Exam', diagnostics);
 
   validateSourceUrls(bank, diagnostics);
+  validateMaintainerUrls(bank, diagnostics);
   validateTopicReferences(bank, topics, knowledge, diagnostics);
   validateKnowledgeReferences(knowledge, diagnostics);
   validateQuestionReferences(topics, knowledge, questions, diagnostics);
@@ -74,6 +75,29 @@ function validateSourceUrls(bank: LocatedQuestionBank, diagnostics: Diagnostic[]
       });
     }
   }
+}
+
+/** 拒绝维护者链接中的访问凭据 */
+function validateMaintainerUrls(bank: LocatedQuestionBank, diagnostics: Diagnostic[]): void {
+  const bankEntity = bank.bank;
+  if (!bankEntity) {
+    return;
+  }
+
+  bankEntity.value.maintainers.forEach((maintainer, index) => {
+    if (maintainer.url === undefined || !hasUrlCredentials(maintainer.url)) {
+      return;
+    }
+    diagnostics.push({
+      code: 'OQB-SECURITY-004',
+      severity: 'error',
+      message: '维护者 URL 不得包含访问凭据',
+      file: bankEntity.file,
+      entityId: bankEntity.value.id,
+      fieldPath: `maintainers[${index}].url`,
+      suggestion: '移除 URL authority 中的用户名和密码及常见凭据参数，改用不含访问凭据的链接',
+    });
+  });
 }
 
 type EntityMap<T> = Map<string, LocatedEntity<T>>;

@@ -79,7 +79,7 @@ export function validateContentSecurity(
   }
 }
 
-/** 检查题库数据中来源 URL 和 Markdown 链接目标是否包含访问凭据 */
+/** 检查题库数据中维护者 URL、来源 URL 和 Markdown 链接目标是否包含访问凭据 */
 export function hasCredentialedQuestionBankUrls(data: QuestionBankData): boolean {
   const located: LocatedQuestionBank = {
     ...(data.bank === undefined ? {} : { bank: { value: data.bank, file: 'bank.yaml' } }),
@@ -92,8 +92,11 @@ export function hasCredentialedQuestionBankUrls(data: QuestionBankData): boolean
   const hasCredentialedSourceUrl = [...data.knowledge, ...data.questions, ...data.groups].some(
     ({ source }) => source.url !== undefined && hasUrlCredentials(source.url),
   );
+  const hasCredentialedMaintainerUrl =
+    data.bank?.maintainers.some(({ url }) => url !== undefined && hasUrlCredentials(url)) ?? false;
   return (
     hasCredentialedSourceUrl ||
+    hasCredentialedMaintainerUrl ||
     collectContentFields(located).some(({ value }) =>
       extractAllMarkdownUrlDestinations(value).some(hasDestinationCredentials),
     )

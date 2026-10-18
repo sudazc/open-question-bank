@@ -164,6 +164,35 @@ describe('OpenQuestionBank Core', () => {
     expect(JSON.stringify(diagnostic)).not.toContain('secret');
   });
 
+  it.each([
+    ['访问令牌查询参数', 'https://example.com/profile?token=secret'],
+    ['用户名和密码', 'https://user:secret@example.com/profile'],
+  ])('阻止维护者 URL 包含%s且不回显凭据', async (_description, maintainerUrl) => {
+    const bankPath = join(rootDir, 'bank.yaml');
+    const bank = await readFile(bankPath, 'utf8');
+    await writeFile(
+      bankPath,
+      bank.replace(
+        '  - name: OpenQuestionBank',
+        `  - name: OpenQuestionBank\n    url: "${maintainerUrl}"`,
+      ),
+    );
+
+    const result = await validateQuestionBankDirectory(rootDir);
+    const diagnostics = result.diagnostics.filter(({ code }) => code === 'OQB-SECURITY-004');
+
+    expect(result.valid).toBe(false);
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]).toMatchObject({
+      severity: 'error',
+      file: 'bank.yaml',
+      entityId: 'sample-bank',
+      fieldPath: 'maintainers[0].url',
+      message: '维护者 URL 不得包含访问凭据',
+    });
+    expect(JSON.stringify(diagnostics)).not.toContain('secret');
+  });
+
   it('release 模式筛除未授权内容及依赖它们的题目、题组和试卷', async () => {
     const firstKnowledge = knowledgeMarkdown('k-one', '', '').replace(
       '正文和引用 [关联知识](oqb://knowledge/)。',
