@@ -11,6 +11,7 @@ export {
   type ExamGenerationErrorCode,
 } from './exam-generator.js';
 export { buildEntityIndex, type EntityIndex } from './entity-index.js';
+export { hasCredentialedQuestionBankUrls } from './content-security-validator.js';
 export { decodeHtmlCharacterReferences } from './html-entities.js';
 export {
   defaultMaxTotalAssetBytes,

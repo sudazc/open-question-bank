@@ -1,4 +1,4 @@
-import type { QuestionBankData } from '@openquestionbank/core';
+import { hasCredentialedQuestionBankUrls, type QuestionBankData } from '@openquestionbank/core';
 
 /** 导出清单中的资源文件信息 */
 export interface ExportAsset {
@@ -12,6 +12,10 @@ export function normalizeExportAssets(
   data: QuestionBankData,
   assets: readonly ExportAsset[],
 ): ExportAsset[] {
+  if (hasCredentialedQuestionBankUrls(data)) {
+    throw new Error('题库来源或 Markdown 链接中存在访问凭据，拒绝导出');
+  }
+
   const assetsByPath = new Map<string, ExportAsset>();
   assertUniquePortableExportPaths(
     assets.map(({ path }) => path),

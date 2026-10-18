@@ -5,7 +5,7 @@ import {
   maskMarkdownCode,
 } from './asset-validator.js';
 import { decodeHtmlCharacterReferences } from './html-entities.js';
-import type { LocatedQuestionBank } from './types.js';
+import type { LocatedQuestionBank, QuestionBankData } from './types.js';
 import { hasUrlAuthorityCredentials } from './url-security.js';
 
 interface ContentField {
@@ -50,8 +50,7 @@ export function validateContentSecurity(
       });
     }
 
-    const destinations = extractMarkdownDestinations(field.value);
-    const linkedUrls = [...destinations, ...extractHttpUrls(field.value)];
+    const destinations = extractAllMarkdownUrlDestinations(field.value);
     if (
       destinations.some(isUnsafeDestination) ||
       /<\s*(?:javascript|vbscript|data)\s*:/i.test(searchable)
@@ -66,7 +65,7 @@ export function validateContentSecurity(
         suggestion: '外部链接使用 HTTP、HTTPS、mailto 或 tel；内部引用使用合法的 oqb:// 实体地址',
       });
     }
-    if (linkedUrls.some(hasDestinationCredentials)) {
+    if (destinations.some(hasDestinationCredentials)) {
       diagnostics.push({
         code: 'OQB-SECURITY-003',
         severity: 'error',
@@ -78,6 +77,27 @@ export function validateContentSecurity(
       });
     }
   }
+}
+
+/** 检查题库数据中来源 URL 和 Markdown 链接目标是否包含访问凭据 */
+export function hasCredentialedQuestionBankUrls(data: QuestionBankData): boolean {
+  const located: LocatedQuestionBank = {
+    ...(data.bank === undefined ? {} : { bank: { value: data.bank, file: 'bank.yaml' } }),
+    topics: data.topics.map((value) => ({ value, file: 'topics' })),
+    knowledge: data.knowledge.map((value) => ({ value, file: 'knowledge' })),
+    questions: data.questions.map((value) => ({ value, file: 'questions' })),
+    groups: data.groups.map((value) => ({ value, file: 'groups' })),
+    exams: data.exams.map((value) => ({ value, file: 'exams' })),
+  };
+  const hasCredentialedSourceUrl = [...data.knowledge, ...data.questions, ...data.groups].some(
+    ({ source }) => source.url !== undefined && hasUrlAuthorityCredentials(source.url),
+  );
+  return (
+    hasCredentialedSourceUrl ||
+    collectContentFields(located).some(({ value }) =>
+      extractAllMarkdownUrlDestinations(value).some(hasDestinationCredentials),
+    )
+  );
 }
 
 function collectContentFields(bank: LocatedQuestionBank): ContentField[] {
@@ -215,6 +235,10 @@ function isUnsafeDestination(destination: string): boolean {
 
 function hasDestinationCredentials(destination: string): boolean {
   return hasUrlAuthorityCredentials(normalizeDestination(destination));
+}
+
+function extractAllMarkdownUrlDestinations(markdown: string): string[] {
+  return [...extractMarkdownDestinations(markdown), ...extractHttpUrls(markdown)];
 }
 
 function normalizeDestination(destination: string): string {

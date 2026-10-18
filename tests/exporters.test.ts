@@ -112,6 +112,42 @@ describe('OpenQuestionBank JSON 导出器', () => {
   });
 });
 
+describe('各格式共用的导出安全检查', () => {
+  it.each([
+    [
+      'Markdown 链接',
+      {
+        ...data,
+        knowledge: data.knowledge.map((entity) => ({
+          ...entity,
+          body: '[凭据链接](https://user:secret@example.com/private)',
+        })),
+      },
+    ],
+    [
+      '来源 URL',
+      {
+        ...data,
+        knowledge: data.knowledge.map((entity) => ({
+          ...entity,
+          source: { ...entity.source, url: 'https://user:secret@example.com/private' },
+        })),
+      },
+    ],
+  ])('直接调用各格式导出器时也拒绝含凭据的%s', (_description, credentialedData) => {
+    const exporters = [
+      () => createQuestionBankJsonExport(credentialedData, assets),
+      () => createQuestionBankGithubMarkdownExport(credentialedData, assets),
+      () => createQuestionBankObsidianVaultExport(credentialedData, assets),
+      () => createQuestionBankNotionExport(credentialedData, assets),
+    ];
+
+    for (const createExport of exporters) {
+      expect(createExport).toThrow('访问凭据');
+    }
+  });
+});
+
 describe('跨平台导出文件名', () => {
   it('拒绝 Windows 非法文件名、保留设备名和超长路径段', () => {
     for (const path of [
