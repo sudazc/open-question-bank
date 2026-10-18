@@ -1,6 +1,6 @@
-import { mkdtemp, mkdir, open, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, open, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
+import { platform, tmpdir } from 'node:os';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Exam, Question, QuestionGroup } from '../packages/schema/src/types.js';
 import { readFileWithinLimit } from '../packages/core/src/loader.js';
@@ -74,6 +74,32 @@ describe('OpenQuestionBank Core', () => {
       }),
     );
     expect(result.diagnostics.some(({ code }) => code.startsWith('OQB-SCHEMA-'))).toBe(false);
+  });
+
+  it.each([
+    ['实体', 'questions', 0],
+    ['资源', 'assets', 2],
+  ] as const)('拒绝通过中间层符号链接访问%s目录', async (_kind, directory, questionCount) => {
+    const bankPath = join(rootDir, 'bank.yaml');
+    const bankContents = await readFile(bankPath, 'utf8');
+    const linkedPath = join(rootDir, 'linked');
+    await symlink(rootDir, linkedPath, platform() === 'win32' ? 'junction' : 'dir');
+    await writeFile(
+      bankPath,
+      bankContents.replace(`  ${directory}: ${directory}`, `  ${directory}: linked/${directory}`),
+    );
+
+    const result = await validateQuestionBankDirectory(rootDir);
+
+    expect(result.valid).toBe(false);
+    expect(result.data.questions).toHaveLength(questionCount);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'OQB-FILE-010',
+        severity: 'error',
+        file: 'linked',
+      }),
+    );
   });
 
   it('draft 模式兼容未审核的内容，strict 模式报告发布资格问题', async () => {

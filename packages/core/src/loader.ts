@@ -140,6 +140,7 @@ export async function loadQuestionBank(
     maxFileBytes,
     maxTotalBytes,
     0,
+    absoluteRoot,
     canonicalRoot,
   );
   if ('diagnostic' in bankRead) {
@@ -232,6 +233,7 @@ export async function loadQuestionBank(
         maxFileBytes,
         maxTotalBytes,
         totalBytesRead,
+        absoluteRoot,
         canonicalRoot,
       );
       if ('bytesRead' in loaded) {
@@ -297,6 +299,11 @@ async function discoverFiles(
 
     let entries: Dirent[];
     try {
+      const symbolicLinkPath = await findSymbolicLinkPath(displayRoot, currentPath);
+      if (symbolicLinkPath !== undefined) {
+        diagnostics.push(unsafePathDiagnostic(displayRoot, symbolicLinkPath));
+        return;
+      }
       const metadata = await lstat(currentPath);
       if (metadata.isSymbolicLink()) {
         diagnostics.push(unsafePathDiagnostic(displayRoot, currentPath));
@@ -477,6 +484,11 @@ async function validateAssetsDirectory(
     return;
   }
   try {
+    const symbolicLinkPath = await findSymbolicLinkPath(rootDir, directoryPath);
+    if (symbolicLinkPath !== undefined) {
+      diagnostics.push(unsafePathDiagnostic(rootDir, symbolicLinkPath));
+      return;
+    }
     const metadata = await lstat(directoryPath);
     if (metadata.isSymbolicLink()) {
       diagnostics.push(unsafePathDiagnostic(rootDir, directoryPath));
@@ -516,11 +528,15 @@ async function readDocument(
   maxFileBytes: number,
   maxTotalBytes: number,
   totalBytesRead: number,
+  rootDir: string,
   canonicalRoot: string,
 ): Promise<{ value: unknown; bytesRead: number } | { diagnostic: Diagnostic; bytesRead?: number }> {
   let bytesRead = 0;
   let file: FileHandle | undefined;
   try {
+    if ((await findSymbolicLinkPath(rootDir, fullPath)) !== undefined) {
+      return { diagnostic: unsafePathDiagnosticFromRelative(relativePath) };
+    }
     const metadata = await lstat(fullPath);
     if (metadata.isSymbolicLink() || !metadata.isFile()) {
       return { diagnostic: unsafePathDiagnosticFromRelative(relativePath) };
@@ -699,6 +715,28 @@ function resolveBankRelativePath(rootDir: string, relativePath: string): string 
   }
   const candidate = resolve(rootDir, ...segments);
   return isContained(rootDir, candidate) ? candidate : undefined;
+}
+
+async function findSymbolicLinkPath(
+  rootDir: string,
+  targetPath: string,
+): Promise<string | undefined> {
+  const pathFromRoot = relative(rootDir, targetPath);
+  if (pathFromRoot === '' || pathFromRoot === '.') {
+    return undefined;
+  }
+  if (pathFromRoot === '..' || pathFromRoot.startsWith(`..${sep}`) || isAbsolute(pathFromRoot)) {
+    return targetPath;
+  }
+
+  let currentPath = rootDir;
+  for (const segment of pathFromRoot.split(sep)) {
+    currentPath = resolve(currentPath, segment);
+    if ((await lstat(currentPath)).isSymbolicLink()) {
+      return currentPath;
+    }
+  }
+  return undefined;
 }
 
 function isContained(rootDir: string, target: string): boolean {
