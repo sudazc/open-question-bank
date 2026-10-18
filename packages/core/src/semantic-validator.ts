@@ -36,7 +36,21 @@ function validateSourceUrls(bank: LocatedQuestionBank, diagnostics: Diagnostic[]
   for (const entity of [...bank.knowledge, ...bank.questions, ...bank.groups]) {
     const source = entity.value.source;
     if (source.url !== undefined) {
-      if (!isHttpUrl(source.url)) {
+      const url = parseHttpUrl(source.url);
+      if (
+        (url !== undefined && (url.username !== '' || url.password !== '')) ||
+        hasUrlAuthorityCredentials(source.url)
+      ) {
+        diagnostics.push({
+          code: 'OQB-SOURCE-003',
+          severity: 'error',
+          message: '来源 URL 不得包含用户名或密码',
+          file: entity.file,
+          entityId: entity.value.id,
+          fieldPath: 'source.url',
+          suggestion: '移除 URL 中的用户名和密码，改用不含访问凭据的来源地址',
+        });
+      } else if (!url) {
         diagnostics.push({
           code: 'OQB-SOURCE-002',
           severity: 'warning',
@@ -63,13 +77,20 @@ function validateSourceUrls(bank: LocatedQuestionBank, diagnostics: Diagnostic[]
   }
 }
 
-function isHttpUrl(value: string): boolean {
+function parseHttpUrl(value: string): URL | undefined {
   try {
     const url = new URL(value.trim());
-    return (url.protocol === 'http:' || url.protocol === 'https:') && url.hostname.length > 0;
+    return (url.protocol === 'http:' || url.protocol === 'https:') && url.hostname.length > 0
+      ? url
+      : undefined;
   } catch {
-    return false;
+    return undefined;
   }
+}
+
+function hasUrlAuthorityCredentials(value: string): boolean {
+  const authority = /^(?:[a-z][a-z\d+.-]*:)?[\\/]{2}([^/?#\\]*)/i.exec(value.trim())?.[1];
+  return authority !== undefined && authority.lastIndexOf('@') > 0;
 }
 
 type EntityMap<T> = Map<string, LocatedEntity<T>>;

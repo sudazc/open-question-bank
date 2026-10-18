@@ -489,6 +489,32 @@ describe('OpenQuestionBank CLI', () => {
     );
   });
 
+  it('来源 URL 含访问凭据时阻止导出且不回显凭据', async () => {
+    const bankDir = join(rootDir, 'bank');
+    const exportDir = join(rootDir, 'dist');
+    const sourceUrl = 'https://alice:secret@example.com/question';
+    await runCli(['init', bankDir], output);
+    const questionFile = join(bankDir, 'questions', 'example.yaml');
+    const question = (await readFile(questionFile, 'utf8')).replace(
+      'source:\n  type: original',
+      `source:\n  type: original\n  url: "${sourceUrl}"`,
+    );
+    await writeFile(questionFile, question);
+
+    const exitCode = await runCli(
+      ['export', bankDir, '--format', 'github-markdown', '--out', exportDir],
+      output,
+    );
+    const cliOutput = `${stdout.join('\n')}\n${stderr.join('\n')}`;
+
+    expect(exitCode).toBe(1);
+    expect(cliOutput).toContain('OQB-SOURCE-003');
+    expect(cliOutput).toContain('未生成导出文件');
+    expect(cliOutput).not.toContain('alice');
+    expect(cliOutput).not.toContain('secret');
+    expect(existsSync(exportDir)).toBe(false);
+  });
+
   it('拒绝将导出目录放入题库源资源目录', async () => {
     const bankDir = join(rootDir, 'bank');
     const assetMarker = join(bankDir, 'assets', '.gitkeep');

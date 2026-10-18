@@ -22,7 +22,7 @@ Markdown 知识文件的 YAML Front Matter 存放 `Knowledge` 元数据，正文
 - `Bank.paths` 中的考点、知识、题目、题组、试卷和资源目录必须互不相同且互不嵌套；Core 按大小写不敏感、Unicode NFC 归一化，以及 Windows 会忽略目录段末尾点和空格的规则比较，避免递归扫描时跨类型读取同一文件或在不同文件系统上发生路径碰撞。
 - 每个 `Question` 和 `Knowledge` 都要求 `source` 与 `review`。`QuestionGroup` 也要求这两个字段。来源和审核状态使用 Schema 中列出的枚举。
 - `official_public` 只描述来源类型，不表示取得转载或再发布许可。授权判断属于发布校验。
-- `source.url` 是可选字符串。Core 会对非原创来源缺少链接和格式无效的链接给出警告，但不会联网验证链接可访问性或页面内容。
+- `source.url` 是可选字符串。非原创来源缺少链接或链接不是有效 HTTP / HTTPS 地址时会收到警告；URL 不得包含用户名或密码，否则 Core 会以 `OQB-SOURCE-003` 错误阻止导出。Core 不联网验证链接可访问性或页面内容。
 - `Bank.license` 和 `source.license` 使用字符串；P0 未规定 SPDX 标识符还是 SPDX 表达式，Schema 1.0 和 Core 都不解析许可证语法。Core 的 strict / release 模式拒绝空值和常见待确认占位值，并检查署名信息是否填写；它不判断许可证兼容性或实际授权效力。
 - `extensions` 为对象，用于命名空间扩展；不得覆盖或重新解释标准字段。
 - `topicIds`、`knowledgeIds` 等 ID 数组禁止完全重复项。实体是否存在以及 ID 是否与目标类型对应，由 `core` 检查。

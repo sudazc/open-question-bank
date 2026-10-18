@@ -129,6 +129,35 @@ describe('OpenQuestionBank Core', () => {
     ]);
   });
 
+  it.each([
+    ['用户名', 'https://user@example.com/question'],
+    ['用户名和密码', 'https://user:secret@example.com/question'],
+    ['百分号编码的凭据', 'https://%75ser:%73ecret@example.com/question'],
+    ['格式错误 URL 中的凭据', 'https://user:secret@example.com:invalid/question'],
+    ['非 HTTP URL 中的凭据', 'ftp://user:secret@example.com/question'],
+  ])('阻止来源 URL 包含%s', async (_description, sourceUrl) => {
+    await writeFile(
+      join(rootDir, 'questions/one.yaml'),
+      questionYaml('q-one', 'k-one').replace(
+        'source: { type: original }',
+        `source: { type: original, url: "${sourceUrl}" }`,
+      ),
+    );
+
+    const result = await validateQuestionBankDirectory(rootDir);
+    const diagnostic = result.diagnostics.find(({ code }) => code === 'OQB-SOURCE-003');
+
+    expect(result.valid).toBe(false);
+    expect(diagnostic).toMatchObject({
+      severity: 'error',
+      file: 'questions/one.yaml',
+      entityId: 'q-one',
+      fieldPath: 'source.url',
+      message: '来源 URL 不得包含用户名或密码',
+    });
+    expect(JSON.stringify(diagnostic)).not.toContain('secret');
+  });
+
   it('release 模式筛除未授权内容及依赖它们的题目、题组和试卷', async () => {
     const firstKnowledge = knowledgeMarkdown('k-one', '', '').replace(
       '正文和引用 [关联知识](oqb://knowledge/)。',
