@@ -369,6 +369,10 @@ async function discoverFiles(
         continue;
       }
       if (entry.isDirectory()) {
+        if (!isPortableBankPathSegment(entry.name)) {
+          diagnostics.push(createInvalidEntityPathDiagnostic(relativePath));
+          continue;
+        }
         await visit(fullPath, depth + 1);
         continue;
       }
@@ -377,6 +381,10 @@ async function discoverFiles(
       }
       const extension = entry.name.slice(entry.name.lastIndexOf('.')).toLowerCase();
       if (!expectedExtensions.includes(extension)) {
+        continue;
+      }
+      if (!isPortableBankPathSegment(entry.name)) {
+        diagnostics.push(createInvalidEntityPathDiagnostic(relativePath));
         continue;
       }
       if (files.length >= remainingFiles) {
@@ -457,6 +465,17 @@ function createInvalidBankPathDiagnostic(name: string, path: string): Diagnostic
     suggestion: isAssetsPath
       ? '将资源目录设置为题库根目录下符合跨平台文件系统规则的相对路径'
       : '使用题库根目录下的相对路径，并确保每段名称符合跨平台文件系统规则',
+  };
+}
+
+function createInvalidEntityPathDiagnostic(path: string): Diagnostic {
+  return {
+    code: 'OQB-FILE-022',
+    severity: 'error',
+    message: `实体文件或目录名不可跨平台使用：${path}`,
+    file: path,
+    suggestion:
+      '重命名路径段；每段不得包含 Windows 非法字符或控制字符，不能以点或空格结尾、不能使用保留设备名，UTF-8 长度不能超过 255 字节',
   };
 }
 
@@ -722,7 +741,7 @@ function resolveBankRelativePath(rootDir: string, relativePath: string): string 
         segment === '' ||
         segment === '.' ||
         segment === '..' ||
-        !isPortableBankDirectorySegment(segment),
+        !isPortableBankPathSegment(segment),
     )
   ) {
     return undefined;
@@ -731,7 +750,7 @@ function resolveBankRelativePath(rootDir: string, relativePath: string): string 
   return isContained(rootDir, candidate) ? candidate : undefined;
 }
 
-function isPortableBankDirectorySegment(segment: string): boolean {
+function isPortableBankPathSegment(segment: string): boolean {
   if (
     segment.endsWith('.') ||
     segment.endsWith(' ') ||

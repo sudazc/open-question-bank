@@ -86,7 +86,7 @@ https://github.com/sudazc/open-question-bank/blob/main/AI_GUIDE.md
 - `init` 生成的考点、知识笔记、题目和题库元数据只是帮助理解格式、验证工具的模板示例，不代表用户要求的正式题库内容。交付前必须替换或删除所有示例和占位信息；尤其要按实际内容修改题库名称、简介、维护者和许可证，不要把模板中的示例题、示例知识或许可证当作已确认内容。
 - 每个实体使用稳定 ID；题目、知识和考点之间按 ID 关联，不按文件名关联。
 - 按 `bank.yaml` 中的 `paths` 保存文件；Knowledge 使用 Markdown Front Matter，正文从 Front Matter 后开始。
-- `bank.yaml` 中的 `paths` 使用正斜杠相对路径；每段目录名都需兼容 Windows、macOS 和 Linux，避免 Windows 非法字符、控制字符、末尾点或空格、`CON` / `NUL` 等设备名及超过 255 个 UTF-8 字节的目录段。
+- `bank.yaml` 中的 `paths` 使用正斜杠相对路径；目录段、被递归扫描的实体子目录名及 `.yaml`、`.yml`、`.md` 实体文件名都需兼容 Windows、macOS 和 Linux，避免 Windows 非法字符、控制字符、末尾点或空格、`CON` / `NUL` 等设备名及超过 255 个 UTF-8 字节的路径段。无关扩展名文件不会被 Core 读取，也不会因文件名规则阻断校验。
 - 源 Markdown 的内部实体引用写成 `[关联内容](oqb://knowledge/{id})` 这样的标准链接；考点、题目和试卷使用各自对应的 `oqb://` 实体地址。不要写 Obsidian Wiki 双链或嵌入（`[[...]]`、`![[...]]`），以免 GitHub Markdown 和 Notion 导出无法统一处理。
 - 每道题至少要有稳定 ID、题型、题干、正确答案、难度、分值、所属考点或知识、来源和审核状态。六种题型及答案结构以 `docs/data-model.md` 和 Schema 为准。
 - 题目依赖共享材料时，将它放入完整题组项，规则组卷使用 `unit: group`；只有题干包含全部作答信息时，才单独引用题组子题或用 `unit: question` 抽取。

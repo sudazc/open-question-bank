@@ -123,6 +123,99 @@ describe('OpenQuestionBank Core', () => {
     expect(result.diagnostics.some(({ code }) => code === 'OQB-REF-001')).toBe(false);
   });
 
+  it.skipIf(platform() !== 'win32')('拒绝 UTF-8 长度超限的实体文件名', async () => {
+    const fileName = `${'é'.repeat(126)}.yaml`;
+    await writeFile(
+      join(rootDir, 'questions', fileName),
+      questionYaml('q-long-file-name', 'k-one'),
+    );
+
+    const result = await validateQuestionBankDirectory(rootDir);
+
+    expect(result.valid).toBe(false);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'OQB-FILE-022',
+        severity: 'error',
+        file: `questions/${fileName}`,
+      }),
+    );
+    expect(result.data.questions.map(({ id }) => id)).not.toContain('q-long-file-name');
+  });
+
+  it.skipIf(platform() !== 'win32')('拒绝 UTF-8 长度超限的实体子目录名', async () => {
+    const directoryName = 'é'.repeat(128);
+    const directory = join(rootDir, 'questions', directoryName);
+    await mkdir(directory, { recursive: true });
+    await writeFile(
+      join(directory, 'question.yaml'),
+      questionYaml('q-long-directory-name', 'k-one'),
+    );
+
+    const result = await validateQuestionBankDirectory(rootDir);
+
+    expect(result.valid).toBe(false);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'OQB-FILE-022',
+        severity: 'error',
+        file: `questions/${directoryName}`,
+      }),
+    );
+    expect(result.data.questions.map(({ id }) => id)).not.toContain('q-long-directory-name');
+  });
+
+  it.skipIf(platform() === 'win32')('拒绝包含 Windows 非法字符的实体文件名', async () => {
+    const fileName = 'question?bank.yaml';
+    await writeFile(
+      join(rootDir, 'questions', fileName),
+      questionYaml('q-invalid-file-name', 'k-one'),
+    );
+
+    const result = await validateQuestionBankDirectory(rootDir);
+
+    expect(result.valid).toBe(false);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'OQB-FILE-022',
+        severity: 'error',
+        file: `questions/${fileName}`,
+      }),
+    );
+    expect(result.data.questions.map(({ id }) => id)).not.toContain('q-invalid-file-name');
+  });
+
+  it.skipIf(platform() === 'win32')('拒绝 Windows 保留设备名作为实体子目录', async () => {
+    const directoryName = 'CON';
+    const directory = join(rootDir, 'questions', directoryName);
+    await mkdir(directory, { recursive: true });
+    await writeFile(
+      join(directory, 'question.yaml'),
+      questionYaml('q-invalid-directory-name', 'k-one'),
+    );
+
+    const result = await validateQuestionBankDirectory(rootDir);
+
+    expect(result.valid).toBe(false);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'OQB-FILE-022',
+        severity: 'error',
+        file: `questions/${directoryName}`,
+      }),
+    );
+    expect(result.data.questions.map(({ id }) => id)).not.toContain('q-invalid-directory-name');
+  });
+
+  it.skipIf(platform() === 'win32')('忽略不支持扩展名的不可移植实体文件名', async () => {
+    await writeFile(join(rootDir, 'questions', 'question?bank.txt'), 'ignored');
+
+    const result = await validateQuestionBankDirectory(rootDir);
+
+    expect(result.valid).toBe(true);
+    expect(result.diagnostics.some(({ code }) => code === 'OQB-FILE-022')).toBe(false);
+  });
+
   it.each([
     ['实体', 'questions', 0],
     ['资源', 'assets', 2],
