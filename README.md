@@ -155,7 +155,7 @@ review:
   status: draft
 ```
 
-`type` 决定答案结构。V1.0 支持：`single_choice`、`multiple_choice`、`true_false`、`fill_blank`、`numeric` 和 `short_answer`。每道题都需要稳定 `id`、题干、正确答案、难度、来源及审核状态。AI 建库时应至少关联一个考点或知识笔记；Schema 要求 `topicIds` 和 `knowledgeIds` 为数组，Core 会检查引用目标，但不会强制数组非空。填空题用 `{{blank-id}}` 标记题干中的空，并在答案中使用对应 ID。题型字段和答案示例见 [数据模型说明](docs/data-model.md) 和 [AI 构建指南](AI_GUIDE.md)。
+`type` 决定答案结构。V1.0 支持：`single_choice`、`multiple_choice`、`true_false`、`fill_blank`、`numeric` 和 `short_answer`。每道题都需要稳定 `id`、题干、正确答案、难度、来源及审核状态。AI 建库时应至少关联一个考点或知识笔记；Schema 要求 `topicIds` 和 `knowledgeIds` 为数组，Core 会检查引用目标；两类关联都为空时会发出不阻断校验的质量警告。填空题用 `{{blank-id}}` 标记题干中的空，并在答案中使用对应 ID。题型字段和答案示例见 [数据模型说明](docs/data-model.md) 和 [AI 构建指南](AI_GUIDE.md)。
 
 ### 添加知识笔记
 
@@ -317,7 +317,7 @@ Schema 检查单个实体的字段结构；重复 ID、引用目标是否存在�
 
 已实现：Schema 1.0、YAML / Markdown 读取、结构和语义校验、资源检查、题库索引、审核授权模式、初始化模板、确定性规则组卷、CLI 构建 / 校验 / 统计 / 诊断、标准 JSON 导出、GitHub Markdown 阅读包、Obsidian Vault、Notion CSV / Markdown 导入包和发布清单。
 
-尚未实现：简答题自动语义评分、完整的内容质量审核规则、在线刷题、账号、数据库和学习记录。项目架构和职责边界见 [架构说明](docs/architecture.md)。
+尚未实现：简答题自动语义评分，以及自动判断题干是否清晰、答案和解析是否符合来源等需要语义判断的内容审核；这些内容仍应由人工审核或按 [AI 构建指南](AI_GUIDE.md) 使用外部 AI 助手核对。项目也不提供在线刷题、账号、数据库和学习记录。项目架构和职责边界见 [架构说明](docs/architecture.md)。
 
 ## 开发与贡献
 

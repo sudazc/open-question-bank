@@ -10,7 +10,7 @@ interface QualityTextField {
   fieldPath: string;
 }
 
-/** 检查空白文本、重复题干和重复选项 */
+/** 检查空白文本、缺少题目关联和重复内容 */
 export function validateContentQuality(
   bank: LocatedQuestionBank,
   diagnostics: Diagnostic[],
@@ -48,6 +48,18 @@ export function validateContentQuality(
 
   const firstQuestionByStem = new Map<string, LocatedEntity<{ id: string }>>();
   for (const question of bank.questions) {
+    if (question.value.topicIds.length === 0 && question.value.knowledgeIds.length === 0) {
+      diagnostics.push({
+        code: 'OQB-QUALITY-006',
+        severity: 'warning',
+        message: '题目尚未关联任何考点或知识笔记',
+        file: question.file,
+        entityId: question.value.id,
+        fieldPath: 'topicIds / knowledgeIds',
+        suggestion: '至少关联一个相关考点或知识笔记，便于按学习范围组织和检索',
+      });
+    }
+
     const stem = normalizeText(question.value.stem);
     if (stem) {
       const first = firstQuestionByStem.get(stem);

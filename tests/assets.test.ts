@@ -55,7 +55,7 @@ describe('Core 资源校验', () => {
     const result = await validateQuestionBankDirectory(rootDir);
 
     expect(result.valid, JSON.stringify(result.diagnostics, null, 2)).toBe(true);
-    expect(result.diagnostics).toEqual([]);
+    expect(result.diagnostics.filter(({ code }) => code !== 'OQB-QUALITY-006')).toEqual([]);
   });
 
   it('限制引用资源累计大小，并按资源路径去重', async () => {
@@ -85,7 +85,7 @@ describe('Core 资源校验', () => {
       expect.objectContaining({ code: 'OQB-ASSET-005', severity: 'fatal' }),
     );
     expect(atLimit.valid).toBe(true);
-    expect(atLimit.diagnostics).toEqual([]);
+    expect(atLimit.diagnostics.filter(({ code }) => code !== 'OQB-QUALITY-006')).toEqual([]);
   });
 
   it('拒绝无效的引用资源累计大小限制', async () => {

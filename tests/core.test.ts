@@ -181,6 +181,15 @@ describe('OpenQuestionBank Core', () => {
     expect(codes).toContain('OQB-LICENSE-002');
     expect(codes).toContain('OQB-REF-010');
     expect(result.diagnostics.every(({ severity }) => severity === 'warning')).toBe(true);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'OQB-REF-010',
+        severity: 'warning',
+        message: '题组 group-reading 未纳入 release 内容，试卷已一并排除',
+        entityId: 'exam-fixed',
+        fieldPath: 'items[0].groupId',
+      }),
+    );
   });
 
   it('release 模式拒绝题库许可证待确认占位值', async () => {
@@ -574,7 +583,7 @@ describe('OpenQuestionBank Core', () => {
       stem: '选择所有正确选项',
       choices,
       answer: { choiceIds: choices.map(({ id }) => id).reverse() },
-      topicIds: [],
+      topicIds: ['topic-scale'],
       knowledgeIds: [],
       difficulty: '入门',
       tags: [],
@@ -587,7 +596,7 @@ describe('OpenQuestionBank Core', () => {
       type: 'true_false',
       stem: `判断题 ${index}`,
       answer: index % 2 === 0,
-      topicIds: [],
+      topicIds: ['topic-scale'],
       knowledgeIds: [],
       difficulty: '入门',
       tags: [],
@@ -624,7 +633,9 @@ describe('OpenQuestionBank Core', () => {
 
     const result = validateQuestionBank({
       rootDir,
-      topics: [],
+      topics: [
+        { file: 'topics/scale.yaml', value: { id: 'topic-scale', name: '性能测试', order: 0 } },
+      ],
       knowledge: [],
       questions: [
         { file: 'questions/choices.yaml', value: choiceQuestion },
@@ -855,6 +866,27 @@ describe('OpenQuestionBank Core', () => {
         severity: 'warning',
         entityId: 'q-two',
         fieldPath: 'stem',
+      }),
+    );
+  });
+
+  it('对未关联考点或知识笔记的题目发出非阻断警告', async () => {
+    await writeFile(
+      join(rootDir, 'questions/unlinked.yaml'),
+      questionYaml('q-unlinked', 'k-one')
+        .replace('topicIds: [topic-child]', 'topicIds: []')
+        .replace('knowledgeIds: [k-one]', 'knowledgeIds: []'),
+    );
+
+    const result = await validateQuestionBankDirectory(rootDir);
+
+    expect(result.valid).toBe(true);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'OQB-QUALITY-006',
+        severity: 'warning',
+        entityId: 'q-unlinked',
+        fieldPath: 'topicIds / knowledgeIds',
       }),
     );
   });

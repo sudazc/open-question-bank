@@ -257,7 +257,7 @@ function filterReleaseContent(
         diagnostics.push({
           code: 'OQB-REF-010',
           severity: 'warning',
-          message: `${unavailable.label} ${unavailable.id} 未納入 release 內容，試卷已一併排除`,
+          message: `${unavailable.label} ${unavailable.id} 未纳入 release 内容，试卷已一并排除`,
           file: entity.file,
           entityId: entity.value.id,
           fieldPath: unavailable.fieldPath,
