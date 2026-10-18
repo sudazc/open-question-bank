@@ -749,6 +749,11 @@ async function inspectSvgContent(
 
 /** 检查 SVG 文本是否包含活动内容或外部资源 */
 export function getSvgSecurityIssue(source: string): string | undefined {
+  const decodedSource = decodeHtmlCharacterReferences(source);
+  const externalCssReferenceSource = decodeCssEscapes(decodedSource).replace(
+    /\/\*[\s\S]*?\*\//g,
+    '',
+  );
   if (/<!\s*(?:doctype|entity)\b|<\?xml-stylesheet\b|\bxml:base\s*=/i.test(source)) {
     return 'SVG 包含不允许的文档类型、实体或外部样式声明';
   }
@@ -767,7 +772,7 @@ export function getSvgSecurityIssue(source: string): string | undefined {
     return 'SVG 不允许包含动画元素';
   }
 
-  for (const match of source.matchAll(
+  for (const match of decodedSource.matchAll(
     /\b(?:href|xlink:href|src)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/gi,
   )) {
     const target = (match[1] ?? match[2] ?? match[3] ?? '').trim();
@@ -775,10 +780,27 @@ export function getSvgSecurityIssue(source: string): string | undefined {
       return 'SVG 只能使用内部片段引用，不能加载外部或内嵌资源';
     }
   }
-  if (/\burl\(\s*(?!['"]?#)/i.test(source)) {
+  if (/\burl\(\s*(?!['"]?#)/i.test(externalCssReferenceSource)) {
     return 'SVG 的 url() 只能引用同一文件中的片段';
   }
   return undefined;
+}
+
+function decodeCssEscapes(source: string): string {
+  return source.replace(
+    /\\(?:([0-9a-f]{1,6})(?:\r\n|[\t\n\f\r ])?|(?:\r\n|[\n\r\f])|([\s\S]))/gi,
+    (_escape, hexadecimal: string | undefined, escaped: string | undefined) => {
+      if (hexadecimal !== undefined) {
+        const codePoint = Number.parseInt(hexadecimal, 16);
+        return codePoint === 0 ||
+          codePoint > 0x10ffff ||
+          (codePoint >= 0xd800 && codePoint <= 0xdfff)
+          ? '\uFFFD'
+          : String.fromCodePoint(codePoint);
+      }
+      return escaped ?? '';
+    },
+  );
 }
 
 function maskRange(characters: string[], start: number, end: number): void {

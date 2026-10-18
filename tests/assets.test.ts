@@ -530,6 +530,18 @@ describe('Core 资源校验', () => {
     ['外部 HTTP 图像', '<svg><image href="https://example.com/image.png" /></svg>'],
     ['内嵌 data URI', '<svg><image href="data:image/png;base64,AAAA" /></svg>'],
     ['CSS 外部资源', '<svg><path fill="url(https://example.com/pattern.svg#paint)" /></svg>'],
+    [
+      '经 XML 字符引用编码的 CSS 外部资源',
+      '<svg><path fill="url&#40;https://example.com/pattern.svg#paint&#41;" /></svg>',
+    ],
+    [
+      '经 CSS 转义编码的 CSS 外部资源',
+      '<svg><path fill="u\\72l(https://example.com/pattern.svg#paint)" /></svg>',
+    ],
+    [
+      '被 CSS 注释分隔的 CSS 外部资源',
+      '<svg><path fill="u/**/rl(https://example.com/pattern.svg#paint)" /></svg>',
+    ],
     ['XML 外部实体', '<!DOCTYPE svg [<!ENTITY xxe SYSTEM "file:///secret">]><svg>&xxe;</svg>'],
   ])('拒绝包含%s的 SVG 资源', async (_description, svg) => {
     await writeFile(
@@ -557,7 +569,7 @@ describe('Core 资源校验', () => {
     );
     await writeFile(
       join(rootDir, 'assets/internal.svg'),
-      '<svg><defs><linearGradient id="paint" /></defs><path fill="url(#paint)" /></svg>',
+      '<svg><defs><linearGradient id="paint" /></defs><path fill="url(#paint)"/><path stroke="url&#40;#paint&#41;"/></svg>',
     );
 
     const result = await validateQuestionBankDirectory(rootDir);
