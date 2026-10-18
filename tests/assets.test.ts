@@ -487,7 +487,7 @@ describe('Core 资源校验', () => {
     expect(result.valid).toBe(false);
     expect(result.diagnostics).toContainEqual(
       expect.objectContaining({
-        code: 'OQB-SECURITY-003',
+        code: 'OQB-SECURITY-005',
         severity: 'error',
         entityId: 'knowledge-asset',
       }),
@@ -518,7 +518,7 @@ describe('Core 资源校验', () => {
       expect(result.valid).toBe(false);
       expect(result.diagnostics).toContainEqual(
         expect.objectContaining({
-          code: 'OQB-SECURITY-003',
+          code: 'OQB-SECURITY-005',
           severity: 'error',
           entityId: 'knowledge-asset',
         }),
@@ -555,7 +555,7 @@ describe('Core 资源校验', () => {
     expect(result.valid).toBe(false);
     expect(result.diagnostics).toContainEqual(
       expect.objectContaining({
-        code: 'OQB-SECURITY-003',
+        code: 'OQB-SECURITY-005',
         severity: 'error',
         entityId: 'knowledge-asset',
       }),
@@ -590,12 +590,32 @@ describe('Core 资源校验', () => {
     await writeFile(join(rootDir, 'assets/shared.svg'), '<svg onload="alert(1)"/>');
 
     const result = await validateQuestionBankDirectory(rootDir);
-    const diagnostics = result.diagnostics.filter(({ code }) => code === 'OQB-SECURITY-003');
+    const diagnostics = result.diagnostics.filter(({ code }) => code === 'OQB-SECURITY-005');
 
     expect(diagnostics.map(({ entityId }) => entityId).sort()).toEqual([
       'knowledge-asset',
       'question-asset',
     ]);
+  });
+
+  it('使用不同诊断码区分 SVG 活动内容和 Markdown 访问凭据', async () => {
+    await writeFile(
+      join(rootDir, 'knowledge/note.md'),
+      knowledgeMarkdown(
+        ['assets/unsafe.svg'],
+        '![图](assets/unsafe.svg) [私有资料](https://user:secret@example.com/guide)',
+      ),
+    );
+    await writeFile(join(rootDir, 'assets/unsafe.svg'), '<svg><script>alert(1)</script></svg>');
+
+    const result = await validateQuestionBankDirectory(rootDir);
+    const securityCodes = result.diagnostics
+      .filter(({ code }) => code.startsWith('OQB-SECURITY-'))
+      .map(({ code }) => code)
+      .sort();
+
+    expect(securityCodes).toEqual(['OQB-SECURITY-003', 'OQB-SECURITY-005']);
+    expect(JSON.stringify(result.diagnostics)).not.toContain('secret');
   });
 
   it('在创建输出目录前拒绝跨平台重名路径', async () => {
@@ -735,7 +755,7 @@ describe('Core 资源校验', () => {
     expect(result.valid).toBe(true);
     expect(result.data.knowledge.map(({ id }) => id)).toEqual(['k-approved']);
     expect(result.diagnostics).not.toContainEqual(
-      expect.objectContaining({ code: 'OQB-SECURITY-003', entityId: 'k-draft' }),
+      expect.objectContaining({ code: 'OQB-SECURITY-005', entityId: 'k-draft' }),
     );
   });
 

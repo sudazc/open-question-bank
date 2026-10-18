@@ -119,7 +119,7 @@ function removeExcludedAssetDiagnostics(
     const diagnostic = diagnostics[index];
     if (
       diagnostic &&
-      (diagnostic.code.startsWith('OQB-ASSET-') || diagnostic.code === 'OQB-SECURITY-003') &&
+      (diagnostic.code.startsWith('OQB-ASSET-') || diagnostic.code === 'OQB-SECURITY-005') &&
       diagnostic.severity !== 'fatal' &&
       diagnostic.entityId !== undefined &&
       excludedKeys.has(JSON.stringify([diagnostic.file, diagnostic.entityId]))

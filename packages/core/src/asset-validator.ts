@@ -252,7 +252,7 @@ export async function validateAssetReferences(
           diagnostics,
           entry.file,
           entry.entityId,
-          'OQB-SECURITY-003',
+          'OQB-SECURITY-005',
           svgIssue,
           entry.fieldPath,
           '移除 SVG 中的脚本、事件、外部引用、样式和实体声明，保留静态路径与图形元素',
