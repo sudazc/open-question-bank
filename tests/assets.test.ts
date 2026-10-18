@@ -75,6 +75,66 @@ describe('Core 资源校验', () => {
     expect(result.diagnostics.filter(({ code }) => code !== 'OQB-QUALITY-006')).toEqual([]);
   });
 
+  it('检查简答题参考答案中的资源链接与 assets 清单', async () => {
+    const assetPath = 'assets/answer-image.png';
+    await writeFile(join(rootDir, assetPath), 'image');
+    await writeFile(
+      join(rootDir, 'questions/question.yaml'),
+      shortAnswerQuestionYaml(`参考图 ![答案图](${assetPath})`, []),
+    );
+
+    const unlisted = await validateQuestionBankDirectory(rootDir);
+
+    expect(unlisted.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'OQB-ASSET-003',
+        entityId: 'question-asset',
+        fieldPath: 'answer.referenceAnswer',
+        message: 'Markdown 资源链接未列入 assets：assets/answer-image.png',
+      }),
+    );
+
+    await writeFile(
+      join(rootDir, 'questions/question.yaml'),
+      shortAnswerQuestionYaml(`参考图 ![答案图](${assetPath})`, [assetPath]),
+    );
+    const listed = await validateQuestionBankDirectory(rootDir);
+
+    expect(listed.valid, JSON.stringify(listed.diagnostics, null, 2)).toBe(true);
+    expect(listed.diagnostics.filter(({ code }) => code.startsWith('OQB-ASSET-'))).toEqual([]);
+  });
+
+  it('拒绝在没有 assets 清单的试卷说明中引用本地资源', async () => {
+    const assetPath = 'assets/exam-handout.pdf';
+    await writeFile(join(rootDir, assetPath), 'pdf');
+    await writeFile(join(rootDir, 'questions/question.yaml'), questionYaml('题目', []));
+    await writeFile(
+      join(rootDir, 'exams/exam.yaml'),
+      [
+        'id: exam-asset',
+        'title: 资源试卷',
+        `description: "[讲义](${assetPath})"`,
+        'mode: fixed',
+        'items:',
+        '  - kind: question',
+        '    questionId: question-asset',
+        '    score: 1',
+      ].join('\n'),
+    );
+
+    const result = await validateQuestionBankDirectory(rootDir);
+
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'OQB-ASSET-003',
+        entityId: 'exam-asset',
+        file: 'exams/exam.yaml',
+        fieldPath: 'description',
+        message: '题库、考点或试卷说明不能声明本地资源链接：assets/exam-handout.pdf',
+      }),
+    );
+  });
+
   it('限制引用资源累计大小，并按资源路径去重', async () => {
     await writeFile(
       join(rootDir, 'knowledge/note.md'),
@@ -798,6 +858,24 @@ function questionYaml(stem: string, assets: string[]): string {
     'type: true_false',
     'stem: ' + JSON.stringify(stem),
     'answer: true',
+    'topicIds: []',
+    'knowledgeIds: []',
+    'difficulty: 入门',
+    'tags: []',
+    'score: 1',
+    'assets: ' + JSON.stringify(assets),
+    'source: { type: original }',
+    'review: { status: draft }',
+  ].join('\n');
+}
+
+function shortAnswerQuestionYaml(referenceAnswer: string, assets: string[]): string {
+  return [
+    'id: question-asset',
+    'type: short_answer',
+    'stem: 简答题',
+    'answer:',
+    `  referenceAnswer: ${JSON.stringify(referenceAnswer)}`,
     'topicIds: []',
     'knowledgeIds: []',
     'difficulty: 入门',

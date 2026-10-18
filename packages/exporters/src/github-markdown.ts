@@ -331,7 +331,7 @@ function renderQuestionFiles(
       : undefined;
     const answerSection = [
       answerMarkers.start,
-      `## 答案\n\n${renderQuestionAnswer(question)}`,
+      `## 答案\n\n${renderQuestionAnswer(question, path, assets, targets)}`,
       ...(explanation ? [`## 解析\n\n${explanation}`] : []),
       answerMarkers.end,
     ].join('\n\n');
@@ -411,7 +411,12 @@ function renderQuestionChoices(question: Question): string {
   return `## 选项\n\n${choices.join('\n')}`;
 }
 
-function renderQuestionAnswer(question: Question): string {
+function renderQuestionAnswer(
+  question: Question,
+  sourcePath: string,
+  assets: readonly ExportAsset[],
+  targets: Map<EntityKind, Map<string, EntityTarget>>,
+): string {
   switch (question.type) {
     case 'single_choice': {
       const choice = question.choices.find(({ id }) => id === question.answer.choiceId);
@@ -468,7 +473,10 @@ function renderQuestionAnswer(question: Question): string {
             )
             .join('\n')}`
         : '';
-      return [normalizeMarkdown(question.answer.referenceAnswer), rubricMarkdown]
+      return [
+        rewriteMarkdown(question.answer.referenceAnswer, sourcePath, assets, targets),
+        rubricMarkdown,
+      ]
         .filter((section) => section !== '')
         .join('\n\n');
     }

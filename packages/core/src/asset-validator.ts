@@ -17,6 +17,7 @@ interface AssetCollections {
   knowledge: readonly AssetEntity[];
   questions: readonly AssetEntity[];
   groups: readonly AssetEntity[];
+  exams: readonly AssetEntity[];
 }
 
 interface AssetPathEntry {
@@ -50,13 +51,18 @@ export async function validateAssetReferences(
       entity,
       fields: [{ path: 'body', value: getRecord(entity.value)?.body }],
     })),
-    ...collections.questions.map((entity) => ({
-      entity,
-      fields: [
-        { path: 'stem', value: getRecord(entity.value)?.stem },
-        { path: 'explanation', value: getRecord(entity.value)?.explanation },
-      ],
-    })),
+    ...collections.questions.map((entity) => {
+      const value = getRecord(entity.value);
+      const answer = getRecord(value?.answer);
+      return {
+        entity,
+        fields: [
+          { path: 'stem', value: value?.stem },
+          { path: 'explanation', value: value?.explanation },
+          { path: 'answer.referenceAnswer', value: answer?.referenceAnswer },
+        ],
+      };
+    }),
     ...collections.groups.map((entity) => ({
       entity,
       fields: [{ path: 'passage', value: getRecord(entity.value)?.passage }],
@@ -66,6 +72,7 @@ export async function validateAssetReferences(
   const metadataEntities = [
     ...(collections.bank === undefined ? [] : [collections.bank]),
     ...collections.topics,
+    ...collections.exams,
   ];
   for (const entity of metadataEntities) {
     const value = getRecord(entity.value);
@@ -86,10 +93,10 @@ export async function validateAssetReferences(
         entityId,
         normalized.kind === 'invalid' ? 'OQB-ASSET-001' : 'OQB-ASSET-003',
         normalized.kind === 'invalid'
-          ? '题库或考点说明包含无效的本地资源链接：' + destination
-          : '题库或考点说明不能声明本地资源链接：' + normalized.path,
+          ? '题库、考点或试卷说明包含无效的本地资源链接：' + destination
+          : '题库、考点或试卷说明不能声明本地资源链接：' + normalized.path,
         'description',
-        '移除本地资源链接，或将资源移至知识正文、题目或题组材料并在对应 assets 中声明',
+        '移除本地资源链接；需要分发的资源请放入知识、题目或题组并通过 assets 声明',
       );
     }
   }

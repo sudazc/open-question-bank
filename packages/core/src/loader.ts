@@ -263,6 +263,7 @@ export async function loadQuestionBank(
       knowledge: result.knowledge,
       questions: result.questions,
       groups: result.groups,
+      exams: result.exams,
     },
     maxTotalAssetBytes,
     result.diagnostics,

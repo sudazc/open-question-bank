@@ -213,6 +213,54 @@ describe('跨平台导出文件名', () => {
 });
 
 describe('OpenQuestionBank GitHub Markdown 导出器', () => {
+  it('重写简答题参考答案中的资源路径', () => {
+    const shortAnswer = data.questions.find((question) => question.id === 'question-short-answer');
+    if (!shortAnswer || shortAnswer.type !== 'short_answer') {
+      throw new Error('应存在简答题示例');
+    }
+    const assetPath = 'assets/answer-image.svg';
+    const imageBytes = new TextEncoder().encode('<svg/>');
+    const answerAssets = [
+      ...assets,
+      {
+        path: assetPath,
+        sizeBytes: imageBytes.byteLength,
+        sha256: createHash('sha256').update(imageBytes).digest('hex'),
+      },
+    ];
+    const linkedData: QuestionBankData = {
+      ...data,
+      questions: data.questions.map((question) =>
+        question.id === shortAnswer.id
+          ? {
+              ...shortAnswer,
+              assets: [assetPath],
+              answer: {
+                ...shortAnswer.answer,
+                referenceAnswer: `参考图 ![答案图](${assetPath})`,
+              },
+            }
+          : question,
+      ),
+    };
+
+    const githubExport = createQuestionBankGithubMarkdownExport(linkedData, answerAssets);
+    const githubQuestion = githubExport.files.find(
+      ({ path }) => path === 'questions/id-question-short-answer.md',
+    );
+    const obsidianExport = createQuestionBankObsidianVaultExport(linkedData, answerAssets);
+
+    expect(githubQuestion?.contents).toContain('![答案图](../assets/answer-image.svg)');
+    expect(
+      obsidianExport.files.some(
+        ({ path, contents }) =>
+          path.startsWith('题目/') &&
+          path !== '题目/索引.md' &&
+          contents.includes('![[assets/answer-image.svg]]'),
+      ),
+    ).toBe(true);
+  });
+
   it('在 Markdown 页面中显示中文来源和审核状态，Notion CSV 保留机器值', () => {
     const sourceTypes = ['original', 'official_public', 'licensed', 'adapted', 'unknown'] as const;
     const reviewStatuses = ['draft', 'pending', 'approved', 'deprecated'] as const;

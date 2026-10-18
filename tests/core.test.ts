@@ -571,7 +571,7 @@ describe('OpenQuestionBank Core', () => {
         code: 'OQB-ASSET-003',
         entityId: 'sample-bank',
         fieldPath: 'description',
-        message: '题库或考点说明不能声明本地资源链接：assets/logo.svg',
+        message: '题库、考点或试卷说明不能声明本地资源链接：assets/logo.svg',
       }),
     );
     expect(result.diagnostics).toContainEqual(
@@ -579,7 +579,7 @@ describe('OpenQuestionBank Core', () => {
         code: 'OQB-ASSET-003',
         entityId: 'topic-root',
         fieldPath: 'description',
-        message: '题库或考点说明不能声明本地资源链接：assets/topic.pdf',
+        message: '题库、考点或试卷说明不能声明本地资源链接：assets/topic.pdf',
       }),
     );
   });
