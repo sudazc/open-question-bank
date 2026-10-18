@@ -119,7 +119,7 @@ Markdown 允许常用安全标签 `br`、`hr`、`sub`、`sup`、`kbd`、`mark`�
 
 - `draft` 保持现有结构与语义校验行为，不因未审核或来源授权信息不足额外报错
 - `strict` 保留全部结构有效实体；每个内容实体都必须为 `review.status: approved`，且满足下述授权信息要求，否则产生阻止校验通过的错误
-- `release` 仅保留审核通过且满足授权信息要求的 `Knowledge`、`Question` 和 `QuestionGroup`；被筛除内容会产生 warning。依赖被筛除知识、题目或题组的实体及固定试卷 / 已生成试卷结果也会一并筛除，之后才校验最终引用图并构建 `data` 和 `index`
+- `release` 仅保留审核通过且满足授权信息要求的 `Knowledge`、`Question` 和 `QuestionGroup`；被筛除内容会产生 warning。依赖被筛除知识、题目或题组的实体及固定试卷 / 已生成试卷结果也会一并筛除，之后才校验最终引用图并构建 `data` 和 `index`。如果题组未纳入 release，但部分子题仍符合发布条件，子题会作为独立题目保留，并报告 `OQB-GROUP-004`；共享材料不会导出，需确认子题脱离材料后仍能作答
 
 授权字段按保守规则检查：`original` 来源依赖 `Bank.license`；`official_public`、`licensed` 和 `adapted` 来源必须填写有效的 `source.license` 与 `source.attribution`；`unknown` 来源不能进入 release。strict / release 会拒绝空值和常见待确认占位值，例如 `TBD`、`unknown` 和 `TBD - not for publication`。许可证字符串不按 SPDX 解析，也不会推断许可证兼容性或法律效力。公开可访问的官方资料不会自动获得发布资格。
 
@@ -133,4 +133,4 @@ Core 只检查当前 `review.status`，不记录或比较内容审核时的版�
 
 每条诊断包含错误码、等级、消息和相对文件路径；可选字段包括实体 ID、字段路径、建议和行列位置。等级为 `fatal` 或 `error` 时 `ValidationResult.valid` 为 `false`；`warning` 和 `info` 不阻止校验通过。`release` 的 `data` 和 `index` 只包含最终筛选结果。
 
-错误码格式为 `OQB-{类别}-{编号}`。`FILE`、`SCHEMA`、`QUESTION`、`SCORE`、`REF`、`GROUP`、`EXAM`、`ASSET`、`QUALITY`、`REVIEW`、`LICENSE` 和 `VERSION` 分别表示文件、结构、题目语义、评分规则、实体引用、材料题组、试卷、资源、内容质量、审核、授权和版本诊断；Core 也会使用 `SECURITY`、`SOURCE`、`TOPIC` 和 `KNOWLEDGE` 表示对应的细分诊断。`OQB-REF-005` 表示源 Markdown 使用了 Obsidian Wiki 双链或嵌入语法。`OQB-GROUP-004` 是非阻断 warning，表示试卷普通题目项可能缺少其所属题组的共享材料。数值题要求单位但缺少标准答案单位时产生 `OQB-SCORE-001`；`acceptedUnits` 未包含标准答案单位时产生 `OQB-SCORE-002`。已生成试卷记录的题库版本与当前版本不一致时产生非阻断警告 `OQB-VERSION-001`。
+错误码格式为 `OQB-{类别}-{编号}`。`FILE`、`SCHEMA`、`QUESTION`、`SCORE`、`REF`、`GROUP`、`EXAM`、`ASSET`、`QUALITY`、`REVIEW`、`LICENSE` 和 `VERSION` 分别表示文件、结构、题目语义、评分规则、实体引用、材料题组、试卷、资源、内容质量、审核、授权和版本诊断；Core 也会使用 `SECURITY`、`SOURCE`、`TOPIC` 和 `KNOWLEDGE` 表示对应的细分诊断。`OQB-REF-005` 表示源 Markdown 使用了 Obsidian Wiki 双链或嵌入语法。`OQB-GROUP-004` 是非阻断 warning，表示试卷普通题目项或 release 筛选后保留的题组子题可能缺少共享材料。数值题要求单位但缺少标准答案单位时产生 `OQB-SCORE-001`；`acceptedUnits` 未包含标准答案单位时产生 `OQB-SCORE-002`。已生成试卷记录的题库版本与当前版本不一致时产生非阻断警告 `OQB-VERSION-001`。

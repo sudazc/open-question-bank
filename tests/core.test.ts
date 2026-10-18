@@ -508,6 +508,48 @@ describe('OpenQuestionBank Core', () => {
         fieldPath: 'items[0].groupId',
       }),
     );
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'OQB-GROUP-004',
+        severity: 'warning',
+        message: expect.stringContaining('可发布子题将作为独立题目保留'),
+        entityId: 'group-reading',
+        fieldPath: 'questionIds',
+      }),
+    );
+  });
+
+  it('release 模式保留可发布子题时警告共享材料不会导出', async () => {
+    for (const file of [
+      'knowledge/one.md',
+      'knowledge/two.md',
+      'questions/one.yaml',
+      'questions/two.yaml',
+    ]) {
+      const path = join(rootDir, file);
+      const contents = await readFile(path, 'utf8');
+      await writeFile(
+        path,
+        contents.replace('review: { status: draft }', 'review: { status: approved }'),
+      );
+    }
+
+    const result = await validateQuestionBankDirectory(rootDir, { mode: 'release' });
+
+    expect(result.valid).toBe(true);
+    expect(result.data.questions.map(({ id }) => id)).toEqual(['q-one', 'q-two']);
+    expect(result.data.groups).toEqual([]);
+    expect(result.data.exams).toEqual([]);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'OQB-GROUP-004',
+        severity: 'warning',
+        message:
+          '题组 group-reading 未纳入 release，但 2 道可发布子题将作为独立题目保留，共享材料不会导出',
+        entityId: 'group-reading',
+        fieldPath: 'questionIds',
+      }),
+    );
   });
 
   it('release 模式拒绝题库许可证待确认占位值', async () => {

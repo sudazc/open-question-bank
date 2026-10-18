@@ -268,6 +268,29 @@ function filterReleaseContent(
     }
   } while (changed);
 
+  const retainedQuestionIds = entityIds([...eligibleQuestions]);
+  for (const entity of bank.groups) {
+    if (eligibleGroups.has(entity)) {
+      continue;
+    }
+    const retainedMemberCount = entity.value.questionIds.filter((id) =>
+      retainedQuestionIds.has(id),
+    ).length;
+    if (retainedMemberCount === 0) {
+      continue;
+    }
+    diagnostics.push({
+      code: 'OQB-GROUP-004',
+      severity: 'warning',
+      message: `题组 ${entity.value.id} 未纳入 release，但 ${retainedMemberCount} 道可发布子题将作为独立题目保留，共享材料不会导出`,
+      file: entity.file,
+      entityId: entity.value.id,
+      fieldPath: 'questionIds',
+      suggestion:
+        '确认这些子题脱离共享材料后仍可独立作答；若依赖材料，请完成题组的审核和授权，或将相关子题一并排除',
+    });
+  }
+
   return {
     ...bank,
     knowledge: bank.knowledge.filter((entity) => eligibleKnowledge.has(entity)),
