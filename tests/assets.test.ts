@@ -311,6 +311,46 @@ describe('Core 资源校验', () => {
     }
   });
 
+  it.each([
+    ['外部 HTTP 图像', '<svg><image href="https://example.com/image.png" /></svg>'],
+    ['内嵌 data URI', '<svg><image href="data:image/png;base64,AAAA" /></svg>'],
+    ['CSS 外部资源', '<svg><path fill="url(https://example.com/pattern.svg#paint)" /></svg>'],
+    ['XML 外部实体', '<!DOCTYPE svg [<!ENTITY xxe SYSTEM "file:///secret">]><svg>&xxe;</svg>'],
+  ])('拒绝包含%s的 SVG 资源', async (_description, svg) => {
+    await writeFile(
+      join(rootDir, 'knowledge/note.md'),
+      knowledgeMarkdown(['assets/unsafe.svg'], '![图](assets/unsafe.svg)'),
+    );
+    await writeFile(join(rootDir, 'assets/unsafe.svg'), svg);
+
+    const result = await validateQuestionBankDirectory(rootDir);
+
+    expect(result.valid).toBe(false);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'OQB-SECURITY-003',
+        severity: 'error',
+        entityId: 'knowledge-asset',
+      }),
+    );
+  });
+
+  it('允许 SVG 引用同一文件中的片段资源', async () => {
+    await writeFile(
+      join(rootDir, 'knowledge/note.md'),
+      knowledgeMarkdown(['assets/internal.svg'], '![图](assets/internal.svg)'),
+    );
+    await writeFile(
+      join(rootDir, 'assets/internal.svg'),
+      '<svg><defs><linearGradient id="paint" /></defs><path fill="url(#paint)" /></svg>',
+    );
+
+    const result = await validateQuestionBankDirectory(rootDir);
+
+    expect(result.valid).toBe(true);
+    expect(result.diagnostics).toEqual([]);
+  });
+
   it('共享 SVG 的安全诊断关联到每个引用实体', async () => {
     await writeFile(
       join(rootDir, 'knowledge/note.md'),
