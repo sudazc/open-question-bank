@@ -86,14 +86,30 @@ export async function collectExportAssetSources(
     if (!isPathWithin(assetsRoot, sourceFile)) {
       throw new Error(`资源文件不在 Bank.paths.assets 目录内：${path}`);
     }
-    const metadata = await lstat(sourceFile);
-    if (metadata.isSymbolicLink() || !metadata.isFile()) {
-      throw new Error(`资源文件不是普通文件：${path}`);
+    let currentPath = sourceRoot;
+    let sizeBytes: number | undefined;
+    const segments = path.split('/');
+    for (const [index, segment] of segments.entries()) {
+      currentPath = resolve(currentPath, segment);
+      const metadata = await lstat(currentPath);
+      if (metadata.isSymbolicLink()) {
+        throw new Error(`资源路径包含符号链接：${path}`);
+      }
+      const isLast = index === segments.length - 1;
+      if ((isLast && !metadata.isFile()) || (!isLast && !metadata.isDirectory())) {
+        throw new Error(isLast ? `资源文件不是普通文件：${path}` : `资源路径不是普通目录：${path}`);
+      }
+      if (isLast) {
+        sizeBytes = metadata.size;
+      }
     }
-    if (metadata.size > maxTotalAssetBytes - totalAssetBytes) {
+    if (sizeBytes === undefined) {
+      throw new Error(`无法检查资源文件：${path}`);
+    }
+    if (sizeBytes > maxTotalAssetBytes - totalAssetBytes) {
       throw new Error(`题库引用资源累计大小超过限制 ${maxTotalAssetBytes} 字节`);
     }
-    totalAssetBytes += metadata.size;
+    totalAssetBytes += sizeBytes;
     const canonicalFile = await realpath(sourceFile);
     if (!isPathWithin(sourceRoot, canonicalFile) || !isPathWithin(assetsRoot, canonicalFile)) {
       throw new Error(`资源文件路径越出题库资源目录：${path}`);
@@ -103,7 +119,7 @@ export async function collectExportAssetSources(
       sourcePath: canonicalFile,
       sourceRoot,
       assetsRoot,
-      sizeBytes: metadata.size,
+      sizeBytes,
     });
   }
   return assets;

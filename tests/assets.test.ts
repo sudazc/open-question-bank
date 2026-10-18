@@ -227,6 +227,31 @@ describe('Core 资源校验', () => {
     );
   });
 
+  it('导出 API 拒绝资源路径中间层的符号链接', async () => {
+    const targetDirectory = join(rootDir, 'assets/actual');
+    const linkedDirectory = join(rootDir, 'assets/linked');
+    const assetPath = 'assets/linked/image.dat';
+    await mkdir(targetDirectory);
+    await symlink(targetDirectory, linkedDirectory, platform() === 'win32' ? 'junction' : 'dir');
+    await writeFile(join(targetDirectory, 'image.dat'), 'image');
+    const data: QuestionBankData = {
+      bank,
+      topics: [],
+      knowledge: [
+        {
+          ...knowledge,
+          body: `![图片](${assetPath})`,
+          assets: [assetPath],
+        },
+      ],
+      questions: [],
+      groups: [],
+      exams: [],
+    };
+
+    await expect(collectExportAssetSources(rootDir, data, bank)).rejects.toThrow('符号链接');
+  });
+
   it('复制 SVG 时重新检查内容，拒绝校验后同大小替换的活动内容', async () => {
     const assetPath = 'assets/image.svg';
     const sourcePath = join(rootDir, assetPath);
