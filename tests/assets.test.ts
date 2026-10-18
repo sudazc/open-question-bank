@@ -682,6 +682,38 @@ describe('Core 资源校验', () => {
     expect(await readFile(join(outputDir, 'generated.txt'), 'utf8')).toBe(contents);
   });
 
+  it('release 模式保留已阻止后续资源检查的 fatal 诊断', async () => {
+    await writeFile(join(rootDir, 'assets/too-large.bin'), 'x');
+    await writeFile(
+      join(rootDir, 'knowledge/a-draft.md'),
+      knowledgeMarkdown(['assets/too-large.bin'], '![资源](assets/too-large.bin)').replace(
+        'id: knowledge-asset',
+        'id: k-draft',
+      ),
+    );
+    await writeFile(
+      join(rootDir, 'knowledge/z-approved.md'),
+      knowledgeMarkdown(['assets/missing.bin'], '![资源](assets/missing.bin)')
+        .replace('id: knowledge-asset', 'id: k-approved')
+        .replace('review: { status: draft }', 'review: { status: approved }'),
+    );
+
+    const result = await validateQuestionBankDirectory(rootDir, {
+      mode: 'release',
+      maxTotalAssetBytes: 0,
+    });
+
+    expect(result.data.knowledge.map(({ id }) => id)).toEqual(['k-approved']);
+    expect(result.valid).toBe(false);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'OQB-ASSET-005',
+        severity: 'fatal',
+        entityId: 'k-draft',
+      }),
+    );
+  });
+
   it('忽略外部链接和代码片段中的示例链接', async () => {
     await writeFile(
       join(rootDir, 'knowledge/note.md'),

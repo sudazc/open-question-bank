@@ -105,6 +105,8 @@ const exam = generateExam(validated.data, 'exam-template', 'practice-001');
 
 默认单个实体文件最多读取 2 MiB，题库配置及实体文件累计读取上限为 64 MiB；检测超限时最多额外读取 1 字节。实体文件最多 10,000 个，实体目录最多扫描 50,000 个文件和子目录条目，目录嵌套最多 32 层。YAML 最多展开 50 个别名，拒绝循环别名和超过 128 层的 YAML 结构。被引用资源的累计大小默认最多为 256 MiB；只统计实体 `assets[]` 或 Markdown 链接中声明的资源，同一路径只计一次。被引用的 SVG 文件另有 2 MiB 单文件上限，并以 UTF-8 读取检查；超限、无法解码或包含活动内容时会阻止校验通过。可通过 `LoadOptions` 调整单文件、题库文本累计大小、引用资源累计大小、实体文件数量和目录扫描条目限制；各导出 API 也可通过 `maxTotalAssetBytes` 选项调整资源累计上限。Core 不执行 YAML 自定义代码、不跟随符号链接读取实体文件，也不允许配置目录解析到题库根目录之外。
 
+`maxTotalAssetBytes` 在 release 筛选前限制整份源题库中所有已声明资源的扫描量；达到上限会停止后续资源检查，并保留 fatal 诊断，即使触发上限的实体随后会被筛除。
+
 复用 SVG 安全规则时，可使用 `maxSvgAssetBytes` 获取单文件上限，并用 `getSvgSecurityIssue(source)` 检查 SVG 文本；安全内容返回 `undefined`，否则返回问题说明。导出器会对实际复制的 SVG 内容再次执行同一检查。
 
 Markdown 允许常用安全标签 `br`、`hr`、`sub`、`sup`、`kbd`、`mark`、`details` 和 `summary`。其他原始 HTML、文档实体声明及不受支持的 URI 协议会被拒绝；外部 Markdown 链接只允许 `http:`、`https:`、`mailto:` 和 `tel:`，内部引用必须符合 `oqb://{topic|knowledge|question|exam}/{id}` 格式并指向存在的实体。文件协议和应用专用协议（例如 `obsidian:`、`vscode:`）不允许进入题库正文；Obsidian Wiki 双链和嵌入（`[[...]]`、`![[...]]`）也不属于源格式，会产生 `OQB-REF-005` 错误。代码块、行内代码、转义文本，以及使用 `$...$`、`$$...$$`、`\(...\)` 或 `\[...\]` 界定的数学公式中的示例不参与相应引用检查。SVG 只允许静态图形，不允许脚本、事件处理器、样式、动画、外部引用或 XML 实体。该策略会拦截内容，不会把输入改写成经过净化的 HTML。
